@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Habit World",
+    "slug": "habit-world",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#2f2f2f"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#2f2f2f"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
