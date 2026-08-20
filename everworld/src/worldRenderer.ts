@@ -8,6 +8,42 @@ function mulberry(seed: number) {
   };
 }
 
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t;
+}
+
+const WIDTH = 700;
+const HEIGHT = 420;
+
+// The world is framed as a "high oblique" view: you look down and out across
+// the land at an angle, rather than straight down. That keeps the horizon,
+// sky, sun/moon and clouds in frame alongside the ground, which is what lets
+// weather and time-of-day read as part of the world instead of a HUD.
+const HORIZON_Y = 172;
+const SURFACE_FRONT_Y = 392;
+const EDGE_BOTTOM_Y = HEIGHT;
+
+// The ground plane is a trapezoid that narrows toward the horizon (the far
+// edge) and widens toward the viewer (the front edge) — simple one-point
+// perspective. `project` turns a lateral position `u` (0 = left, 1 = right)
+// and a depth `depth` (0 = far / at the horizon, 1 = near / front edge) into
+// screen coordinates and a size scale, so anything placed on the ground gets
+// smaller and sits higher the further away it is.
+const BACK_X0 = 190;
+const BACK_X1 = 510;
+const FRONT_X0 = -30;
+const FRONT_X1 = 730;
+
+function project(u: number, depth: number) {
+  const d = Math.min(1, Math.max(0, depth));
+  const y = lerp(HORIZON_Y, SURFACE_FRONT_Y, d);
+  const xStart = lerp(BACK_X0, FRONT_X0, d);
+  const xWidth = lerp(BACK_X1 - BACK_X0, FRONT_X1 - FRONT_X0, d);
+  const x = xStart + u * xWidth;
+  const scale = lerp(0.42, 1.1, d);
+  return { x, y, scale };
+}
+
 function tree(x: number, y: number, scale: number, tone: string) {
   return `<g transform="translate(${x},${y}) scale(${scale})">
     <polygon points="0,-4 4,10 -4,10" fill="#6b4a30"/>
@@ -78,6 +114,7 @@ export function renderWorldSvg(levels: Levels): string {
   const skyBot = ['#20242e', '#2a3140', '#3d4a55', '#5a7d8f', '#9dc6d9', '#c9ecf5'][blue];
   const groundBase = ['#4a4034', '#564a3a', '#5f5b3d', '#5d6b3e', '#5a7a3f', '#4f8f45'][green];
   const groundEdge = ['#3a3226', '#453b2d', '#4a4a2c', '#485631', '#456530', '#3f7735'][green];
+  const cliffTone = ['#2c241a', '#332a1e', '#3a3020', '#3a3c22', '#334322', '#2e4a26'][green];
 
   let out = `<defs>
     <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
@@ -88,28 +125,37 @@ export function renderWorldSvg(levels: Levels): string {
       <stop offset="0" stop-color="${groundBase}"/>
       <stop offset="1" stop-color="${groundEdge}"/>
     </linearGradient>
+    <linearGradient id="haze" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${skyBot}" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="${skyBot}" stop-opacity="0"/>
+    </linearGradient>
   </defs>`;
 
-  out += `<rect x="0" y="0" width="700" height="420" fill="url(#skyGrad)"/>`;
+  // --- Sky (full-bleed, so it stays visible behind/around the land plane) ---
+  out += `<rect x="0" y="0" width="${WIDTH}" height="${HEIGHT}" fill="url(#skyGrad)"/>`;
 
   if (blue <= 1) {
     const rnd = mulberry(42);
     let stars = '';
     for (let i = 0; i < 40; i++) {
-      const x = rnd() * 700;
-      const y = rnd() * 160;
+      const x = rnd() * WIDTH;
+      const y = rnd() * (HORIZON_Y - 10);
       stars += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1" fill="#ffffff" opacity="${(0.3 + rnd() * 0.5).toFixed(2)}"/>`;
     }
     out += stars;
   } else {
-    out += `<circle cx="580" cy="70" r="${28 + blue * 3}" fill="#fff6d8" opacity="0.85"/>`;
+    // sun position drifts higher/brighter as the sky level rises
+    const sunX = 560;
+    const sunY = 66 - blue * 4;
+    out += `<circle cx="${sunX}" cy="${sunY}" r="${26 + blue * 3}" fill="#fff6d8" opacity="0.9"/>`;
+    out += `<circle cx="${sunX}" cy="${sunY}" r="${44 + blue * 4}" fill="#fff6d8" opacity="0.18"/>`;
   }
 
   if (blue >= 2) {
     const cloudCount = blue - 1;
     for (let i = 0; i < cloudCount; i++) {
-      const cx = 90 + i * 160;
-      const cy = 60 + (i % 2) * 30;
+      const cx = 80 + i * 160;
+      const cy = 50 + (i % 2) * 26;
       out += `<g opacity="0.55" fill="#ffffff">
         <ellipse cx="${cx}" cy="${cy}" rx="34" ry="12"/>
         <ellipse cx="${cx + 22}" cy="${cy + 4}" rx="24" ry="10"/>
@@ -118,54 +164,92 @@ export function renderWorldSvg(levels: Levels): string {
     }
   }
 
-  const groundY = 300;
-  out += `<polygon points="0,${groundY} 700,${groundY} 700,420 0,420" fill="url(#groundGrad)"/>`;
+  // --- Ground plane: an oblique trapezoid, so the land recedes to a horizon
+  // instead of filling the frame like a top-down map ---
+  out += `<polygon points="${BACK_X0},${HORIZON_Y} ${BACK_X1},${HORIZON_Y} ${FRONT_X1},${SURFACE_FRONT_Y} ${FRONT_X0},${SURFACE_FRONT_Y}" fill="url(#groundGrad)"/>`;
 
+  // atmospheric haze where the far ground meets the sky
+  const hazeFrontY = lerp(HORIZON_Y, SURFACE_FRONT_Y, 0.3);
+  out += `<polygon points="${BACK_X0},${HORIZON_Y} ${BACK_X1},${HORIZON_Y} ${lerp(FRONT_X1, BACK_X1, 0.7)},${hazeFrontY} ${lerp(FRONT_X0, BACK_X0, 0.7)},${hazeFrontY}" fill="url(#haze)"/>`;
+
+  // the land's leading edge, given a little thickness so it reads as a
+  // grounded slab rather than a flat map tile
+  out += `<polygon points="${FRONT_X0},${SURFACE_FRONT_Y} ${FRONT_X1},${SURFACE_FRONT_Y} ${FRONT_X1},${EDGE_BOTTOM_Y} ${FRONT_X0},${EDGE_BOTTOM_Y}" fill="${cliffTone}"/>`;
+  out += `<rect x="${FRONT_X0}" y="${SURFACE_FRONT_Y}" width="${FRONT_X1 - FRONT_X0}" height="5" fill="rgba(0,0,0,0.2)"/>`;
+
+  // scattered ground shading, sized by depth for perspective
   const rnd2 = mulberry(7);
-  for (let i = 0; i < 26; i++) {
-    const x = rnd2() * 700;
-    const y = groundY + rnd2() * 120;
-    const w = 30 + rnd2() * 40;
-    const h = 14 + rnd2() * 18;
-    const shade = rnd2() > 0.5 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)';
+  for (let i = 0; i < 30; i++) {
+    const depth = rnd2();
+    const { x, y, scale } = project(rnd2(), depth);
+    const w = (30 + rnd2() * 40) * scale;
+    const h = (14 + rnd2() * 18) * scale;
+    const shade = rnd2() > 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)';
     out += `<polygon points="${x},${y} ${x + w},${y + (rnd2() * 6 - 3)} ${x + w * 0.4},${y + h}" fill="${shade}"/>`;
   }
 
+  // dry cracked-earth fissures when nothing has grown yet
+  if (green === 0) {
+    const rndC = mulberry(313);
+    for (let i = 0; i < 14; i++) {
+      const depth = 0.15 + rndC() * 0.8;
+      const { x, y, scale } = project(rndC(), depth);
+      const len = (24 + rndC() * 30) * scale;
+      const ang = rndC() * Math.PI * 2;
+      const x2 = x + Math.cos(ang) * len;
+      const y2 = y + Math.sin(ang) * len * 0.35;
+      out += `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="rgba(0,0,0,0.25)" stroke-width="${(1.2 * scale).toFixed(2)}"/>`;
+    }
+  }
+
+  // water — sits mid-depth on the plane, widens with level
   if (blue >= 3) {
-    const waterW = 90 + (blue - 3) * 70;
-    const wx = 480;
-    const wy = 330;
+    const waterScale = 1 + (blue - 3) * 0.4;
+    const { x: wx, y: wy, scale } = project(0.66, 0.3);
+    const waterW = 100 * waterScale * scale;
     out += `<ellipse cx="${wx}" cy="${wy}" rx="${waterW}" ry="${waterW * 0.28}" fill="#2f6f93" opacity="0.85"/>`;
-    out += `<ellipse cx="${wx - waterW * 0.15}" cy="${wy - 4}" rx="${waterW * 0.7}" ry="${waterW * 0.18}" fill="#4a95bb" opacity="0.6"/>`;
+    out += `<ellipse cx="${wx - waterW * 0.15}" cy="${wy - 3}" rx="${waterW * 0.7}" ry="${waterW * 0.18}" fill="#4a95bb" opacity="0.6"/>`;
   }
 
   const greenTones = ['#3b6d2b', '#488033', '#59993d', '#6bb249'];
+  const greenRnd = mulberry(101);
+  const treeRnd = mulberry(205);
   if (green >= 1) {
-    const rnd3 = mulberry(101);
-    for (let i = 0; i < green * 2; i++) {
-      const x = 20 + rnd3() * 640;
-      const y = 305 + rnd3() * 95;
-      out += bush(x, y, 0.9 + rnd3() * 0.6, greenTones[Math.min(3, Math.floor(green / 2))]);
+    for (let i = 0; i < green * 3; i++) {
+      const depth = 0.08 + greenRnd() * 0.9;
+      const { x, y, scale } = project(greenRnd(), depth);
+      out += bush(x, y, (0.9 + greenRnd() * 0.5) * scale, greenTones[Math.min(3, Math.floor(green / 2))]);
     }
   }
   if (green >= 2) {
-    const rnd4 = mulberry(205);
     for (let i = 0; i < green * 2; i++) {
-      const x = 20 + rnd4() * 640;
-      const y = 300 + rnd4() * 90;
-      out += tree(x, y, 0.8 + rnd4() * 0.7, greenTones[Math.min(3, Math.floor(green / 2))]);
+      const depth = 0.1 + treeRnd() * 0.85;
+      const { x, y, scale } = project(treeRnd(), depth);
+      out += tree(x, y, (0.8 + treeRnd() * 0.6) * scale, greenTones[Math.min(3, Math.floor(green / 2))]);
     }
   }
 
-  if (brown >= 1) out += hut(140, 300, 1);
-  if (brown >= 2) out += hut(180, 305, 0.85);
-  if (brown >= 3) out += statue(360, 292, 1.1);
+  if (brown >= 1) {
+    const { x, y, scale } = project(0.22, 0.38);
+    out += hut(x, y, scale);
+  }
+  if (brown >= 2) {
+    const { x, y, scale } = project(0.32, 0.3);
+    out += hut(x, y, scale * 0.9);
+  }
+  if (brown >= 3) {
+    const { x, y, scale } = project(0.55, 0.42);
+    out += statue(x, y, scale * 1.1);
+  }
   if (brown >= 4) {
-    out += hut(120, 300, 1.2);
-    out += hut(200, 296, 0.9);
+    const a = project(0.14, 0.55);
+    const b = project(0.36, 0.46);
+    out += hut(a.x, a.y, a.scale * 1.1);
+    out += hut(b.x, b.y, b.scale * 0.9);
   }
   if (brown >= 5) {
-    out += `<g transform="translate(320,270)">
+    const { x, y, scale } = project(0.5, 0.58);
+    out += `<g transform="translate(${x},${y}) scale(${scale})">
       <polygon points="-30,30 30,30 30,-10 -30,-10" fill="#8f7256"/>
       <polygon points="-36,-10 36,-10 0,-40" fill="#6b4e30"/>
       <rect x="-8" y="6" width="16" height="24" fill="#4a3520"/>
@@ -177,22 +261,32 @@ export function renderWorldSvg(levels: Levels): string {
   const greyTones = ['#7a746a', '#8c867a', '#9c968a'];
   if (grey >= 1) {
     for (let i = 0; i < grey; i++) {
-      out += person(400 + i * 22, 310, 1, greyTones[i % 3]);
+      const { x, y, scale } = project(0.6 + i * 0.06, 0.62);
+      out += person(x, y, scale, greyTones[i % 3]);
     }
   }
 
   if (pink >= 1 && green >= 1) {
-    out += bird(200, 120, 1.4);
-    out += bird(230, 100, 1.2);
+    out += bird(200, 110, 1.4);
+    out += bird(232, 92, 1.2);
   }
-  if (pink >= 2 && green >= 1) out += bird(500, 90, 1.3);
-  if (pink >= 3 && green >= 2) out += fox(240, 330, 1.1);
-  if (pink >= 4 && green >= 3) out += fox(560, 320, 1);
-  if (pink >= 5 && green >= 4) out += deer(90, 300, 1.15);
+  if (pink >= 2 && green >= 1) out += bird(500, 82, 1.3);
+  if (pink >= 3 && green >= 2) {
+    const { x, y, scale } = project(0.3, 0.75);
+    out += fox(x, y, scale * 1.1);
+  }
+  if (pink >= 4 && green >= 3) {
+    const { x, y, scale } = project(0.82, 0.68);
+    out += fox(x, y, scale);
+  }
+  if (pink >= 5 && green >= 4) {
+    const { x, y, scale } = project(0.1, 0.72);
+    out += deer(x, y, scale * 1.15);
+  }
 
   const total = blue + green + brown + grey + pink;
   if (total === 0) {
-    out += `<rect x="0" y="0" width="700" height="420" fill="#000000" opacity="0.12"/>`;
+    out += `<rect x="0" y="0" width="${WIDTH}" height="${HEIGHT}" fill="#000000" opacity="0.1"/>`;
   }
 
   return out;
