@@ -64,19 +64,6 @@ body,
   height: auto;
 }
 
-.stage-label {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  font-size: 11px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.75);
-  background: rgba(0, 0, 0, 0.3);
-  padding: 4px 10px;
-  border-radius: 20px;
-}
-
 .status-row {
   width: 100%;
   display: flex;

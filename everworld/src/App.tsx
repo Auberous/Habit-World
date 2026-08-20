@@ -1,4 +1,4 @@
-import { CATEGORIES, MAX_LEVEL, stageLabel, vitalityPercent } from './habitData';
+import { CATEGORIES, MAX_LEVEL, vitalityPercent } from './habitData';
 import { renderWorldSvg } from './worldRenderer';
 import { useWorldState } from './useWorldState';
 import './App.css';
@@ -6,7 +6,6 @@ import './App.css';
 export default function App() {
   const { levels, todaysCompletions, completeHabit, reset } = useWorldState();
   const pct = vitalityPercent(levels);
-  const label = stageLabel(pct);
   const svgInner = renderWorldSvg(levels);
 
   return (
@@ -17,7 +16,6 @@ export default function App() {
       </header>
 
       <div className="stage">
-        <span className="stage-label">{label}</span>
         <svg
           viewBox="0 0 700 420"
           className="world-svg"
