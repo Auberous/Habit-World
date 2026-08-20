@@ -147,6 +147,19 @@ export function renderWorldSvg(levels: Levels): string {
       .walk-in-right { animation-name: walkInRight; }
       @keyframes walkInLeft { from { transform: translateX(-90px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
       @keyframes walkInRight { from { transform: translateX(90px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+      .fog-bank { animation: fogDrift 22s linear infinite, fogFade 3.5s ease-out forwards; }
+      .fog-bank.fog-b { animation-duration: 30s, 3.5s; animation-delay: -6s, 0.4s; }
+      .fog-bank.fog-c { animation-duration: 26s, 3.5s; animation-delay: -14s, 0.8s; }
+      @keyframes fogDrift {
+        from { transform: translateX(-140px); }
+        to { transform: translateX(140px); }
+      }
+      @keyframes fogFade {
+        0% { opacity: 0.85; }
+        70% { opacity: 0.85; }
+        100% { opacity: 0.32; }
+      }
     </style>
   </defs>`;
 
@@ -302,6 +315,16 @@ export function renderWorldSvg(levels: Levels): string {
     const { x, y, scale } = project(0.1, 0.72);
     out += deer(x, y, scale * 1.15);
   }
+
+  // rolling fog: a few soft banks drift in on load and settle into a thin
+  // ground haze, so the world feels like it's waking up rather than just
+  // appearing
+  const fogY = lerp(HORIZON_Y, SURFACE_FRONT_Y, 0.42);
+  out += `<g opacity="0.9">
+    <ellipse class="fog-bank" cx="120" cy="${fogY}" rx="150" ry="22" fill="#ffffff"/>
+    <ellipse class="fog-bank fog-b" cx="380" cy="${fogY + 14}" rx="190" ry="26" fill="#ffffff"/>
+    <ellipse class="fog-bank fog-c" cx="600" cy="${fogY - 8}" rx="160" ry="20" fill="#ffffff"/>
+  </g>`;
 
   const total = blue + green + brown + grey + pink;
   if (total === 0) {
