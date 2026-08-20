@@ -141,6 +141,18 @@ export function renderWorldSvg(levels: Levels): string {
       <stop offset="0" stop-color="${skyBot}" stop-opacity="0.5"/>
       <stop offset="1" stop-color="${skyBot}" stop-opacity="0"/>
     </linearGradient>
+    <radialGradient id="fogGrad" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.65"/>
+      <stop offset="60%" stop-color="#ffffff" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="fogTurbulence" x="-60%" y="-60%" width="220%" height="220%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014 0.03" numOctaves="2" seed="11" result="noise">
+        <animate attributeName="baseFrequency" values="0.014 0.03;0.02 0.038;0.014 0.03" dur="16s" repeatCount="indefinite"/>
+      </feTurbulence>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="34" xChannelSelector="R" yChannelSelector="G"/>
+      <feGaussianBlur stdDeviation="3.5"/>
+    </filter>
     <style>
       .walker { animation-duration: 1.3s; animation-timing-function: cubic-bezier(.2,.7,.25,1); animation-fill-mode: backwards; }
       .walk-in-left { animation-name: walkInLeft; }
@@ -148,17 +160,19 @@ export function renderWorldSvg(levels: Levels): string {
       @keyframes walkInLeft { from { transform: translateX(-90px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
       @keyframes walkInRight { from { transform: translateX(90px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-      .fog-bank { animation: fogDrift 22s linear infinite, fogFade 3.5s ease-out forwards; }
-      .fog-bank.fog-b { animation-duration: 30s, 3.5s; animation-delay: -6s, 0.4s; }
-      .fog-bank.fog-c { animation-duration: 26s, 3.5s; animation-delay: -14s, 0.8s; }
+      .fog-layer { mix-blend-mode: screen; }
+      .fog-bank { animation: fogDrift 34s ease-in-out infinite, fogFade 4s ease-out forwards; }
+      .fog-bank.fog-b { animation-duration: 42s, 4s; animation-delay: -12s, 0.5s; }
+      .fog-bank.fog-c { animation-duration: 38s, 4s; animation-delay: -22s, 1s; }
       @keyframes fogDrift {
-        from { transform: translateX(-140px); }
-        to { transform: translateX(140px); }
+        0% { transform: translateX(-90px); }
+        50% { transform: translateX(70px); }
+        100% { transform: translateX(-90px); }
       }
       @keyframes fogFade {
-        0% { opacity: 0.85; }
-        70% { opacity: 0.85; }
-        100% { opacity: 0.32; }
+        0% { opacity: 0.9; }
+        70% { opacity: 0.9; }
+        100% { opacity: 0.4; }
       }
     </style>
   </defs>`;
@@ -316,14 +330,15 @@ export function renderWorldSvg(levels: Levels): string {
     out += deer(x, y, scale * 1.15);
   }
 
-  // rolling fog: a few soft banks drift in on load and settle into a thin
-  // ground haze, so the world feels like it's waking up rather than just
-  // appearing
+  // rolling fog: turbulence-warped banks drift and slowly boil on load,
+  // then settle into a thin ground haze, so the world feels like it's
+  // waking up rather than just appearing
   const fogY = lerp(HORIZON_Y, SURFACE_FRONT_Y, 0.42);
-  out += `<g opacity="0.9">
-    <ellipse class="fog-bank" cx="120" cy="${fogY}" rx="150" ry="22" fill="#ffffff"/>
-    <ellipse class="fog-bank fog-b" cx="380" cy="${fogY + 14}" rx="190" ry="26" fill="#ffffff"/>
-    <ellipse class="fog-bank fog-c" cx="600" cy="${fogY - 8}" rx="160" ry="20" fill="#ffffff"/>
+  out += `<g class="fog-layer" filter="url(#fogTurbulence)">
+    <ellipse class="fog-bank" cx="90" cy="${fogY - 6}" rx="170" ry="30" fill="url(#fogGrad)"/>
+    <ellipse class="fog-bank fog-b" cx="330" cy="${fogY + 16}" rx="220" ry="36" fill="url(#fogGrad)"/>
+    <ellipse class="fog-bank fog-c" cx="560" cy="${fogY - 10}" rx="190" ry="30" fill="url(#fogGrad)"/>
+    <ellipse class="fog-bank fog-b" cx="700" cy="${fogY + 8}" rx="180" ry="28" fill="url(#fogGrad)"/>
   </g>`;
 
   const total = blue + green + brown + grey + pink;
