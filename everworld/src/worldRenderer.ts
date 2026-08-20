@@ -29,10 +29,10 @@ const EDGE_BOTTOM_Y = HEIGHT;
 // and a depth `depth` (0 = far / at the horizon, 1 = near / front edge) into
 // screen coordinates and a size scale, so anything placed on the ground gets
 // smaller and sits higher the further away it is.
-const BACK_X0 = 190;
-const BACK_X1 = 510;
-const FRONT_X0 = -30;
-const FRONT_X1 = 730;
+const BACK_X0 = -10;
+const BACK_X1 = 710;
+const FRONT_X0 = -60;
+const FRONT_X1 = 760;
 
 function project(u: number, depth: number) {
   const d = Math.min(1, Math.max(0, depth));
@@ -74,37 +74,49 @@ function statue(x: number, y: number, scale: number) {
   </g>`;
 }
 
+// Creatures and townsfolk walk in from whichever side edge they're closer
+// to, so the world feels inhabited rather than assembled. `walker()` wraps a
+// shape in an inner group carrying the walk-in animation, nested inside the
+// caller's placement transform so the animation offset stays in local units.
+function walkerClass(x: number) {
+  return x < WIDTH / 2 ? 'walker walk-in-left' : 'walker walk-in-right';
+}
+
+function walker(x: number, inner: string) {
+  return `<g class="${walkerClass(x)}">${inner}</g>`;
+}
+
 function person(x: number, y: number, scale: number, tone: string) {
-  return `<g transform="translate(${x},${y}) scale(${scale})">
+  return `<g transform="translate(${x},${y}) scale(${scale})">${walker(x, `
     <circle cx="0" cy="-16" r="4" fill="${tone}"/>
     <polygon points="-5,-12 5,-12 4,4 -4,4" fill="${tone}"/>
-  </g>`;
+  `)}</g>`;
 }
 
 function fox(x: number, y: number, scale: number) {
-  return `<g transform="translate(${x},${y}) scale(${scale})">
+  return `<g transform="translate(${x},${y}) scale(${scale})">${walker(x, `
     <polygon points="-10,2 10,2 12,-6 -4,-8" fill="#d9773f"/>
     <polygon points="12,-6 20,-2 12,-1" fill="#d9773f"/>
     <polygon points="-4,-8 -12,-14 -8,-6" fill="#d9773f"/>
     <polygon points="-10,2 -14,10 -8,10" fill="#d9773f"/>
     <polygon points="6,2 4,10 10,10" fill="#d9773f"/>
     <polygon points="-14,10 -6,4 -3,10" fill="#fff" opacity="0.85"/>
-  </g>`;
+  `)}</g>`;
 }
 
 function bird(x: number, y: number, scale: number) {
-  return `<path d="M ${x - 8},${y} Q ${x},${y - 6} ${x + 8},${y} Q ${x},${y - 2} ${x - 8},${y}" fill="none" stroke="#e8a8c0" stroke-width="1.6" transform="scale(${scale})" />`;
+  return `<g class="${walkerClass(x)}"><path d="M ${x - 8},${y} Q ${x},${y - 6} ${x + 8},${y} Q ${x},${y - 2} ${x - 8},${y}" fill="none" stroke="#e8a8c0" stroke-width="1.6" transform="scale(${scale})" /></g>`;
 }
 
 function deer(x: number, y: number, scale: number) {
-  return `<g transform="translate(${x},${y}) scale(${scale})">
+  return `<g transform="translate(${x},${y}) scale(${scale})">${walker(x, `
     <polygon points="-12,4 10,4 12,-6 -6,-8" fill="#a97a52"/>
     <polygon points="-6,-8 -10,-16 -4,-10" fill="#a97a52"/>
     <line x1="-9" y1="-14" x2="-13" y2="-19" stroke="#a97a52" stroke-width="1.4"/>
     <line x1="-9" y1="-14" x2="-6" y2="-20" stroke="#a97a52" stroke-width="1.4"/>
     <polygon points="-12,4 -15,12 -9,12" fill="#a97a52"/>
     <polygon points="4,4 2,12 8,12" fill="#a97a52"/>
-  </g>`;
+  `)}</g>`;
 }
 
 export function renderWorldSvg(levels: Levels): string {
@@ -129,6 +141,13 @@ export function renderWorldSvg(levels: Levels): string {
       <stop offset="0" stop-color="${skyBot}" stop-opacity="0.5"/>
       <stop offset="1" stop-color="${skyBot}" stop-opacity="0"/>
     </linearGradient>
+    <style>
+      .walker { animation-duration: 1.3s; animation-timing-function: cubic-bezier(.2,.7,.25,1); animation-fill-mode: backwards; }
+      .walk-in-left { animation-name: walkInLeft; }
+      .walk-in-right { animation-name: walkInRight; }
+      @keyframes walkInLeft { from { transform: translateX(-90px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+      @keyframes walkInRight { from { transform: translateX(90px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    </style>
   </defs>`;
 
   // --- Sky (full-bleed, so it stays visible behind/around the land plane) ---
