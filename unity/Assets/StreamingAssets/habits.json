@@ -1,0 +1,58 @@
+{
+  "$schema": "./habits.schema.json",
+  "colors": [
+    {
+      "id": "green",
+      "name": "Growth & Nature",
+      "domain": "nutrition, vegetables, healthy eating",
+      "hex": "#4caf50",
+      "unlocks": ["grass", "bushes", "trees", "flowers", "forest_animals"]
+    },
+    {
+      "id": "blue",
+      "name": "Water & Sky",
+      "domain": "hydration, sleep, calmness, mindfulness",
+      "hex": "#2196f3",
+      "unlocks": ["streams", "lakes", "rain", "clouds", "sky_color_shift", "water_creatures"]
+    },
+    {
+      "id": "brown",
+      "name": "Strength & Health",
+      "domain": "exercise, movement, physical routines",
+      "hex": "#8d6e63",
+      "unlocks": ["hills", "mountains", "wind", "sunlight_intensity", "active_animals"]
+    },
+    {
+      "id": "yellow",
+      "name": "Routine & Stability",
+      "domain": "daily tasks, consistency, organisation",
+      "hex": "#fdd835",
+      "unlocks": ["birds", "butterflies", "stable_weather", "seasonal_progression"]
+    },
+    {
+      "id": "purple",
+      "name": "Self-Care & Emotional Wellbeing",
+      "domain": "mental health, rest, reflection",
+      "hex": "#9575cd",
+      "unlocks": ["glow_effects", "fireflies", "magical_particles", "spirit_creatures"]
+    },
+    {
+      "id": "red",
+      "name": "Vitality, Courage & Achievement",
+      "domain": "discipline, personal challenges, pushing yourself",
+      "hex": "#e53935",
+      "unlocks": [
+        "mountain_ranges",
+        "cliffs",
+        "glowing_minerals",
+        "warm_sunsets",
+        "auroras",
+        "starfall_events",
+        "rare_animals",
+        "alpine_plants"
+      ]
+    }
+  ],
+  "maxLevelPerColor": 5,
+  "notes": "A user picks 1-6 habits during onboarding, each mapped to exactly one color id above. Logging a habit increments that color's level (capped at maxLevelPerColor); missing consecutive days decays it. World state is entirely derived from the six color levels — see worldGrowthRules.json."
+}

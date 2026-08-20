@@ -1,0 +1,24 @@
+{
+  "$schema": "./animals.schema.json",
+  "animals": [
+    { "id": "fox", "biome": "forest", "rarity": "common", "behaviour": "wander", "spawnRule": { "color": "green", "minLevel": 3 } },
+    { "id": "deer", "biome": "forest", "rarity": "common", "behaviour": "wander", "spawnRule": { "color": "green", "minLevel": 4 } },
+    { "id": "rabbit", "biome": "forest", "rarity": "common", "behaviour": "flee", "spawnRule": { "color": "green", "minLevel": 2 } },
+    { "id": "bird", "biome": "forest", "rarity": "common", "behaviour": "flock", "spawnRule": { "color": "yellow", "minLevel": 1 } },
+    { "id": "butterfly", "biome": "meadow", "rarity": "common", "behaviour": "flutter", "spawnRule": { "color": "yellow", "minLevel": 2 } },
+    { "id": "hedgehog", "biome": "meadow", "rarity": "common", "behaviour": "wander", "spawnRule": { "color": "yellow", "minLevel": 3 } },
+    { "id": "mouse", "biome": "meadow", "rarity": "common", "behaviour": "scurry", "spawnRule": { "color": "yellow", "minLevel": 2 } },
+    { "id": "goat", "biome": "mountains", "rarity": "uncommon", "behaviour": "climb", "spawnRule": { "color": "brown", "minLevel": 3 } },
+    { "id": "eagle", "biome": "mountains", "rarity": "uncommon", "behaviour": "soar", "spawnRule": { "color": "brown", "minLevel": 4 } },
+    { "id": "wolf", "biome": "mountains", "rarity": "rare", "behaviour": "wander", "spawnRule": { "color": "brown", "minLevel": 5 } },
+    { "id": "frog", "biome": "wetlands", "rarity": "common", "behaviour": "hop", "spawnRule": { "color": "blue", "minLevel": 3 } },
+    { "id": "fish", "biome": "wetlands", "rarity": "common", "behaviour": "swim", "spawnRule": { "color": "blue", "minLevel": 3 } },
+    { "id": "dragonfly", "biome": "wetlands", "rarity": "common", "behaviour": "flutter", "spawnRule": { "color": "blue", "minLevel": 4 } },
+    { "id": "spirit_deer", "biome": "magical", "rarity": "rare", "behaviour": "glide", "spawnRule": { "color": "purple", "minLevel": 4 } },
+    { "id": "glow_moth", "biome": "magical", "rarity": "uncommon", "behaviour": "flutter", "spawnRule": { "color": "purple", "minLevel": 3 } },
+    { "id": "snow_leopard", "biome": "alpine_peaks", "rarity": "legendary", "behaviour": "prowl", "spawnRule": { "color": "red", "minLevel": 5, "requiresStreakDays": 14 } },
+    { "id": "condor", "biome": "alpine_peaks", "rarity": "rare", "behaviour": "soar", "spawnRule": { "color": "red", "minLevel": 4 } }
+  ],
+  "despawnRule": "An animal despawns if its spawnRule.color level drops below (minLevel - 1) — a one-level buffer so a single missed day doesn't instantly empty the world.",
+  "rarityStreakBonus": "requiresStreakDays on a spawnRule means that animal only appears once the user has an active streak of that length in ANY habit feeding that color, on top of the level threshold. Used for legendary/rare creatures as streak rewards."
+}

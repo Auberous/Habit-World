@@ -1,0 +1,14 @@
+{
+  "$schema": "./weather.schema.json",
+  "patterns": [
+    { "id": "clear", "default": true, "trigger": null },
+    { "id": "drifting_clouds", "trigger": { "color": "blue", "minLevel": 1 } },
+    { "id": "rain", "trigger": { "color": "blue", "minLevel": 3 } },
+    { "id": "morning_fog", "trigger": { "always": true }, "notes": "Ambient — plays on world wake-up regardless of habit levels, matches the fog effect already built in the web prototype." },
+    { "id": "warm_sunset", "trigger": { "color": "red", "minLevel": 2 } },
+    { "id": "aurora", "trigger": { "color": "red", "minLevel": 4 } },
+    { "id": "starfall", "trigger": { "color": "red", "minLevel": 5, "requiresStreakDays": 7 }, "rarity": "event" },
+    { "id": "seasonal_progression", "trigger": { "color": "yellow", "minLevel": 3 }, "notes": "Slow palette drift (spring->summer->autumn->winter) tied to consistency, not a discrete overlay." }
+  ],
+  "notes": "Weather is always additive/positive per the spec — nothing here should read as punishing. Multiple patterns can be simultaneously active (e.g. rain + drifting_clouds); the renderer layers them rather than switching between exclusive states."
+}

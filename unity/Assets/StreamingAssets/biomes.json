@@ -1,0 +1,42 @@
+{
+  "$schema": "./biomes.schema.json",
+  "biomes": [
+    {
+      "id": "forest",
+      "name": "Forest",
+      "unlockRule": { "color": "green", "minLevel": 2 },
+      "animals": ["fox", "deer", "rabbit", "bird"]
+    },
+    {
+      "id": "meadow",
+      "name": "Meadow",
+      "unlockRule": { "color": "yellow", "minLevel": 2 },
+      "animals": ["butterfly", "hedgehog", "mouse"]
+    },
+    {
+      "id": "mountains",
+      "name": "Mountains",
+      "unlockRule": { "color": "brown", "minLevel": 3 },
+      "animals": ["goat", "eagle", "wolf"]
+    },
+    {
+      "id": "wetlands",
+      "name": "Wetlands",
+      "unlockRule": { "color": "blue", "minLevel": 3 },
+      "animals": ["frog", "fish", "dragonfly"]
+    },
+    {
+      "id": "magical",
+      "name": "Magical Grove",
+      "unlockRule": { "color": "purple", "minLevel": 4 },
+      "animals": ["spirit_deer", "glow_moth"]
+    },
+    {
+      "id": "alpine_peaks",
+      "name": "Alpine Peaks",
+      "unlockRule": { "color": "red", "minLevel": 4 },
+      "animals": ["snow_leopard", "condor"]
+    }
+  ],
+  "notes": "unlockRule is intentionally simple (single color threshold) for v1. Multi-color AND rules (e.g. wetlands needing both blue>=3 and green>=1) are a natural v2 extension — keep the engine reading rules generically so adding a second condition doesn't require new code."
+}
