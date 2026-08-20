@@ -19,12 +19,18 @@ habits are completed. Five habit colors each grow a different layer of the world
 
 ## Structure
 
-- `src/habitData.ts` — category definitions, level math, stage labels
+- `src/habitData.ts` — category definitions, the `Habit` type, level math, stage labels
 - `src/worldRenderer.ts` — pure function, `Levels -> SVG string`. All the visual logic
   for what unlocks at each level lives here. This is the file to extend when adding
-  new world elements.
-- `src/useWorldState.ts` — habit completion, one-per-day-per-category logic, persistence
-- `src/App.tsx` — layout / UI
+  new world elements. Unaffected by the habit changes below — it only ever sees
+  `Levels`, never habits directly.
+- `src/useWorldState.ts` — user-created habits (add/remove), per-habit daily
+  completion log, persistence, and deriving each category's `Levels` from that log
+  (a category's level is the number of distinct days on which *any* of its habits
+  was completed, capped at `MAX_LEVEL` — preserves the original one-growth-step-
+  per-category-per-day pacing now that a category can hold several habits)
+- `src/App.tsx` — layout / UI: one section per category, listing its habits with a
+  daily checkbox each, plus an inline "+ Add a habit" form
 
 ## Run it
 
@@ -38,9 +44,9 @@ npm run dev
 This is a working prototype of the core loop (tap a category once a day, watch the
 world grow), not a finished app. Still to build:
 
-1. **Real habit list** — right now each "category" is a single tap-to-complete tile.
-   Needs actual named, user-created habits (e.g. "Drink 2L water" under Blue),
-   possibly with presets per category plus custom habit creation.
+1. ~~**Real habit list**~~ — done: each category now holds actual named,
+   user-created habits (e.g. "Drink 2L water" under Blue), added/removed inline,
+   each with its own daily checkbox. No presets — habit text is always user-supplied.
 2. **Auth + cloud sync** — currently `localStorage` only, single device.
 3. **Daily reset / streaks** — habits currently allow one completion per calendar day
    (see `todaysCompletions` in `useWorldState.ts`) but there's no streak tracking,

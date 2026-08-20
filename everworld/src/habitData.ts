@@ -17,6 +17,18 @@ export const CATEGORIES: Category[] = [
   { id: 'pink', name: 'Pink', color: '#d97fa0', desc: 'Rest, joy, self-care' },
 ];
 
+// A real, user-created habit under one category — e.g. category "blue"
+// (Sleep, hydration, calm) might have habits "Drink 2L water" and
+// "Lights out by 11pm". The category itself is never a habit; it only
+// groups the habits the user defines under it.
+export interface Habit {
+  id: string;
+  categoryId: CategoryId;
+  name: string;
+  description?: string;
+  createdAt: number;
+}
+
 export type Levels = Record<CategoryId, number>;
 
 export const EMPTY_LEVELS: Levels = {
