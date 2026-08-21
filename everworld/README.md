@@ -68,11 +68,69 @@ world grow), not a finished app. Still to build:
    `renderWorldSvg` is still a pure, cheap function; the browser's compositor does
    the actual animating, no render loop needed.
 9. **Real fidelity jump** (rigged/lifelike creature motion, true depth/lighting) —
-   the next tier up from (8)'s CSS-driven motion. Two directions discussed and not
-   yet decided: swap creatures for Rive-animated vector characters (stays in this
-   2D engine), or move to a real low-poly 3D engine (Babylon.js) with free CC0
-   asset packs (Kenney/Quaternius) + Mixamo-animated townsfolk. Bigger investment
-   either way — needs a decision before starting.
+   the next tier up from (8)'s CSS-driven motion. Decided: Babylon.js. Phase 0+1
+   (below) is done; see `src/world3d/` and the phased plan there for what's next.
+
+## The Babylon.js 3D track (`src/world3d/`)
+
+The chosen fidelity path from item 9 above. Lives alongside the 2D SVG view
+rather than replacing it — a "3D view (beta)" toggle in the header
+(persisted to `localStorage`) swaps `<Scene3D>` in for the `<svg>` in
+`.stage`. Both views read the same `Levels` from `useWorldState`, so they
+never disagree about what the world contains.
+
+- `src/world3d/buildWorld3d.ts` — scene setup (camera/lights/ground, once)
+  plus a disposable "growth root" of placeholder primitives (boxes, cones,
+  spheres, tubes) rebuilt from `Levels` using the *same* growth thresholds
+  as `worldRenderer.ts` — trees at `green >= 2`, huts at `brown >= 1`, a
+  river at `blue >= 3`, a waterfall once mountains are tall enough, rain +
+  rainbow at `blue === 5`, etc. All animation (sway, wander, river flow,
+  rain, bird flight, a villager's hammering) runs off one shared per-frame
+  loop (`scene.onBeforeRenderObservable`) driving a list of `{mesh, kind,
+  ...}` entries — cheap and easy to extend with a new `AnimKind`.
+- `src/world3d/Scene3D.tsx` — the React `<canvas>` wrapper: owns the
+  `World3D` instance's lifecycle, re-syncs growth when `levels` changes.
+- Imports are deep (`@babylonjs/core/Engines/engine`, not the
+  `@babylonjs/core` barrel) — the barrel pulls in the *entire* engine
+  (audio, physics stubs, GLTF, ~6.6MB before gzip); deep imports tree-shake
+  the bundle down to ~315KB gzipped for what this scene actually uses.
+  Keep new Babylon imports deep too, or the bundle regresses hard.
+
+### Phased plan
+
+- **Phase 0 — Setup.** ✅ Done: `@babylonjs/core` added, tree-shaken correctly.
+- **Phase 1 — Bootstrap.** ✅ Done: high-oblique `ArcRotateCamera` (slow idle
+  orbit, matching the 2D view's framing), lighting, ground, real `Levels`
+  data wired in, and *every* growth element from the 2D renderer ported as
+  placeholder geometry — including continuous animation (sway, wander,
+  river flow, rain, bird flight) via the shared per-frame loop. Verified
+  with headless Playwright: renders correctly at zero habits (barren) and
+  at full bloom, no console errors, toggling back to 2D works cleanly.
+  Known rough edge: at high mountain tiers, a mountain can occlude part of
+  the rainbow arc — camera framing/composition wasn't tuned yet, since this
+  phase was about proving the pipeline, not final composition.
+- **Phase 2 — Real assets (not started).** Swap the placeholder
+  boxes/cones/spheres for actual low-poly models: free, CC0-licensed packs
+  from **Kenney.nl** and **Quaternius** (trees, rocks, simple buildings,
+  animals) — matches the low-poly aesthetic with zero licensing risk.
+  Requires picking specific packs, downloading/importing `.glb` models
+  (Babylon's `SceneLoader`), and re-pointing each placeholder spawn call at
+  a loaded model instead of a `MeshBuilder` primitive.
+- **Phase 3 — Rigged character animation (not started).** Real walk/idle/
+  build animations for villagers and creatures via **Mixamo** (free,
+  auto-rigs a mesh and hands back mocap animation clips) imported as
+  `.glb`/`.fbx` and played through Babylon's `AnimationGroup`s — replaces
+  the current procedural bob/wander placeholders with actual skeletal
+  animation.
+- **Phase 4 — Terrain, lighting, sky polish (not started).** Real
+  heightmap-based ground (rolling hills, not a flat plane), a proper
+  gradient/skybox sky (currently a flat `clearColor`), directional
+  shadows, and fixing the mountain/rainbow occlusion noted above.
+- **Phase 5 — Mobile/perf pass (not started).** Test on an actual phone
+  (not just desktop headless Chromium), tune draw calls/mesh counts,
+  confirm the WebView-in-Expo-Go path from the earlier native-app spec
+  still applies if that direction is revisited, and decide whether the
+  3D view becomes the default or stays opt-in.
 
 ## Design intent (for whoever picks this up)
 

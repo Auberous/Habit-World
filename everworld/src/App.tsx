@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { CATEGORIES, MAX_LEVEL, vitalityPercent, type CategoryId } from './habitData';
 import { renderWorldSvg } from './worldRenderer';
 import { useWorldState } from './useWorldState';
@@ -6,8 +6,21 @@ import IntroScene from './IntroScene';
 import { hasSeenIntro } from './introSeen';
 import './App.css';
 
+// Lazy: Babylon.js is ~315KB gzipped even tree-shaken down. Most visits
+// never touch the 3D toggle, so it shouldn't cost anyone who doesn't.
+const Scene3D = lazy(() => import('./world3d/Scene3D'));
+
+const VIEW_3D_KEY = 'everworld.view3d.v1';
+
 export default function App() {
   const [showIntro, setShowIntro] = useState(() => !hasSeenIntro());
+  const [view3d, setView3d] = useState(() => {
+    try {
+      return localStorage.getItem(VIEW_3D_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
   const {
     levels,
     todaysCompletions,
@@ -24,6 +37,16 @@ export default function App() {
     return <IntroScene onDone={() => setShowIntro(false)} />;
   }
 
+  function toggleView3d() {
+    const next = !view3d;
+    setView3d(next);
+    try {
+      localStorage.setItem(VIEW_3D_KEY, String(next));
+    } catch {
+      // best-effort — the toggle still works for this session either way
+    }
+  }
+
   return (
     <div className="app">
       <header className="header">
@@ -32,12 +55,22 @@ export default function App() {
       </header>
 
       <div className="stage">
-        <svg
-          viewBox="0 0 700 420"
-          className="world-svg"
-          dangerouslySetInnerHTML={{ __html: svgInner }}
-        />
+        {view3d ? (
+          <Suspense fallback={<div className="stage-loading">Loading 3D view…</div>}>
+            <Scene3D levels={levels} />
+          </Suspense>
+        ) : (
+          <svg
+            viewBox="0 0 700 420"
+            className="world-svg"
+            dangerouslySetInnerHTML={{ __html: svgInner }}
+          />
+        )}
       </div>
+
+      <button className="view3d-toggle-btn" onClick={toggleView3d}>
+        {view3d ? '2D view' : '3D view (beta)'}
+      </button>
 
       <div className="status-row">
         <span>World vitality: {pct}%</span>
