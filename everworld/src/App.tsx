@@ -2,9 +2,12 @@ import { useState } from 'react';
 import { CATEGORIES, MAX_LEVEL, vitalityPercent, type CategoryId } from './habitData';
 import { renderWorldSvg } from './worldRenderer';
 import { useWorldState } from './useWorldState';
+import IntroScene from './IntroScene';
+import { hasSeenIntro } from './introSeen';
 import './App.css';
 
 export default function App() {
+  const [showIntro, setShowIntro] = useState(() => !hasSeenIntro());
   const {
     levels,
     todaysCompletions,
@@ -16,6 +19,10 @@ export default function App() {
   } = useWorldState();
   const pct = vitalityPercent(levels);
   const svgInner = renderWorldSvg(levels);
+
+  if (showIntro) {
+    return <IntroScene onDone={() => setShowIntro(false)} />;
+  }
 
   return (
     <div className="app">
@@ -62,6 +69,10 @@ export default function App() {
         colour grows a different layer of the world — animals only appear once the habitat
         that supports them exists.
       </p>
+
+      <button className="replay-intro-btn" onClick={() => setShowIntro(true)}>
+        Watch the intro again
+      </button>
     </div>
   );
 }

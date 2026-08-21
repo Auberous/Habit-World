@@ -321,3 +321,13 @@ body,
   line-height: 1.6;
   text-align: center;
 }
+
+.replay-intro-btn {
+  margin-top: 10px;
+  font-size: 11px;
+  color: #9b9686;
+  background: none;
+  border: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

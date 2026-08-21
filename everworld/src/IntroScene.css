@@ -1,0 +1,145 @@
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #05070a;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+.intro-stage {
+  position: absolute;
+  inset: 0;
+  transform: scale(1) translateY(0);
+  transition: transform 3.2s cubic-bezier(0.22, 0.61, 0.36, 1);
+  filter: brightness(0.82);
+}
+
+.intro-stage-zoomed {
+  transform: scale(1.45) translateY(2.5%);
+  filter: brightness(0.62);
+}
+
+.intro-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Cinematic letterboxing + edge darkening so the scene reads as a "shot",
+   not an app screen. Doesn't intercept taps — only the buttons below do. */
+.intro-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 16%, rgba(0, 0, 0, 0) 62%, rgba(0, 0, 0, 0.75) 100%),
+    radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.45) 100%);
+}
+
+.intro-skip,
+.intro-mute {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  z-index: 2;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(4px);
+}
+
+.intro-skip {
+  right: 16px;
+  padding: 7px 16px;
+  border-radius: 20px;
+  letter-spacing: 0.5px;
+}
+
+.intro-mute {
+  left: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 14px;
+}
+
+.intro-caption-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  padding: 20px 22px max(28px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.intro-welcome h1 {
+  color: #f3efe6;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  font-size: 34px;
+  letter-spacing: 1px;
+  margin: 0 0 10px;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
+}
+
+.intro-welcome p {
+  color: rgba(243, 239, 230, 0.88);
+  font-size: 14px;
+  line-height: 1.6;
+  max-width: 340px;
+  margin: 0 auto 20px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+}
+
+.intro-begin-btn,
+.intro-continue-btn {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: #16211a;
+  background: #eef3e6;
+  border: none;
+  border-radius: 24px;
+  padding: 12px 30px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.intro-continue-btn {
+  margin-top: 18px;
+}
+
+.intro-caption {
+  color: #f3efe6;
+  font-size: 15px;
+  line-height: 1.6;
+  max-width: 380px;
+  margin: 0;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.6);
+  animation: introCaptionIn 0.9s ease-out;
+}
+
+@keyframes introCaptionIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intro-stage {
+    transition: none;
+  }
+  .intro-caption {
+    animation: none;
+  }
+}
