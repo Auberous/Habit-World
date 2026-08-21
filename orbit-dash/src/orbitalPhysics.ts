@@ -27,37 +27,54 @@ export type BodyState = {
   pos: Vec2;
 };
 
-export const SUN = { mass: 26000, radius: 26, color: '#ffd166' };
+// Real solar system, scaled for play rather than for accuracy in any one
+// dimension:
+//  - Orbital distance: real AU ratios, linear (AU_TO_WORLD world units/AU).
+//  - Orbital speed: derived from the real distance via Kepler's third law
+//    (T^2 ∝ a^3), not hand-tuned per planet — so Mercury visibly swings
+//    around while Neptune is nearly motionless during a single flight,
+//    same as it would be for a real spacecraft.
+//  - Body size & mass: real ratios compressed by a shared sqrt() so the
+//    Sun doesn't have to be either invisible-Earth-sized or so huge it
+//    swallows the screen — every solar-system diagram makes this same
+//    trade, since no single linear scale can show both real distance and
+//    real size at once. Ordering and roughly-real proportion (gas giants
+//    dwarfing the inner planets, Sun dominant over everything) survive the
+//    compression; the exact km-for-km ratio does not.
+const AU_TO_WORLD = 150;
+const KEPLER_K = 918.55; // tuned so Earth's angularSpeed lands at 0.5 rad/s
+
+function auOrbit(au: number): number {
+  return au * AU_TO_WORLD;
+}
+
+function keplerAngularSpeed(orbitRadius: number): number {
+  return KEPLER_K / Math.pow(orbitRadius, 1.5);
+}
+
+export const SUN = { mass: 30000, radius: 34, color: '#ffd166' };
 
 export const PLANETS: PlanetDef[] = [
-  {
-    id: 'inner',
-    color: '#8ecae6',
-    mass: 900,
-    radius: 10,
-    orbitRadius: 150,
-    angularSpeed: 0.85,
-    phase0: 0.6,
-  },
-  {
-    id: 'outer',
-    color: '#ff8fa3',
-    mass: 2400,
-    radius: 16,
-    orbitRadius: 270,
-    angularSpeed: 0.4,
-    phase0: 3.4,
-  },
-];
+  { id: 'mercury', color: '#b0a494', mass: 12, radius: 2.0, orbitRadius: auOrbit(0.39), angularSpeed: 0, phase0: 0.9 },
+  { id: 'venus', color: '#e8d9a0', mass: 47, radius: 3.2, orbitRadius: auOrbit(0.72), angularSpeed: 0, phase0: 4.2 },
+  { id: 'earth', color: '#4f9eea', mass: 52, radius: 3.3, orbitRadius: auOrbit(1.0), angularSpeed: 0, phase0: 2.5 },
+  { id: 'mars', color: '#c1440e', mass: 17, radius: 2.4, orbitRadius: auOrbit(1.52), angularSpeed: 0, phase0: 5.6 },
+  { id: 'jupiter', color: '#d8b98a', mass: 927, radius: 10.8, orbitRadius: auOrbit(5.2), angularSpeed: 0, phase0: 1.2 },
+  { id: 'saturn', color: '#e3c88f', mass: 507, radius: 9.8, orbitRadius: auOrbit(9.58), angularSpeed: 0, phase0: 3.8 },
+  { id: 'uranus', color: '#7fdbda', mass: 198, radius: 6.5, orbitRadius: auOrbit(19.22), angularSpeed: 0, phase0: 0.4 },
+  { id: 'neptune', color: '#3457d5', mass: 215, radius: 6.4, orbitRadius: auOrbit(30.05), angularSpeed: 0, phase0: 5.0 },
+].map((p) => ({ ...p, angularSpeed: keplerAngularSpeed(p.orbitRadius) }));
 
-export const LAUNCH_PAD: Vec2 = { x: 0, y: -360 };
-export const VIEW_RADIUS = 460; // world units from origin shown at the board edge when un-zoomed
-// Deliberately far past the planets: reaching it means surviving a genuine
-// multi-slingshot outbound coast, not one lucky close pass.
-export const ESCAPE_RADIUS = 1250;
+// Launched from Earth orbit, not from Earth itself (avoids spawning inside
+// its collision radius) — top of the orbit, same convention as before.
+export const LAUNCH_PAD: Vec2 = { x: 0, y: -auOrbit(1.0) };
+export const VIEW_RADIUS = 320; // world units shown at the board edge when un-zoomed (a bit past Mars)
+// Just past Neptune's real orbit: escaping now means surviving a genuine
+// multi-planet gauntlet, not one lucky close pass near Earth.
+export const ESCAPE_RADIUS = auOrbit(30.05) + 700;
 
-const MIN_GRAVITY_DIST = 6;
-export const COLLISION_MARGIN = 6;
+const MIN_GRAVITY_DIST = 2;
+export const COLLISION_MARGIN = 3;
 
 /** Risk-zone radii around a body, for both collision checks and the on-screen rings. */
 export function riskRadii(body: { radius: number }) {
@@ -100,7 +117,7 @@ export function gravityAccel(shipPos: Vec2, bodies: BodyState[]): { accel: Vec2;
     const dx = b.pos.x - shipPos.x;
     const dy = b.pos.y - shipPos.y;
     const dist = Math.max(Math.hypot(dx, dy), MIN_GRAVITY_DIST);
-    if (dist <= b.radius + 6) {
+    if (dist <= b.radius + COLLISION_MARGIN) {
       collidedWith = b;
     }
     const f = (G * b.mass) / (dist * dist * dist);

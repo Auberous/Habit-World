@@ -10,9 +10,24 @@ repo (`App.js` at the repo root, and `everworld/`).
 
 ## Current state: a skill loop, not a fire-and-forget prototype
 
-One star, two planets on circular orbits, a ship under real inverse-square
-gravity from all three — and, on top of that physics core, the pieces that
-turn it from "drag and watch" into something you have to learn:
+The real solar system (Mercury through Neptune, real AU spacing, real
+relative sizes/masses) and a ship under real inverse-square gravity from all
+nine bodies — plus, on top of that physics core, the pieces that turn it
+from "drag and watch" into something you have to learn:
+
+- **Real planets, real ratios**: orbital distances follow real AU ratios
+  linearly; orbital speed is derived per-planet from Kepler's third law, not
+  hand-tuned (Mercury visibly swings around, Neptune barely moves during a
+  flight — same as it would for a real spacecraft); body size and mass
+  follow real ratios compressed by a shared `sqrt()` so the range stays
+  screen-sane while gas giants still dwarf the inner planets and the Sun
+  still dominates everything. See `src/orbitalPhysics.ts` for the exact
+  scaling and the tradeoff it's making.
+- **Escape is genuinely hard now**: the Sun's mass is realistic enough
+  relative to max launch speed that a direct, unassisted shot physically
+  cannot reach local escape velocity — it will always arc back inward. Real
+  gravity assists (ideally from Jupiter or Saturn, exactly like the actual
+  Voyager missions) are mandatory, not optional flavor.
 
 - **Risk-zone rings** around every body while aiming: green (safe, small
   assist), yellow (bigger assist, real risk), red (collision). Skimming the
@@ -54,9 +69,12 @@ preview.
   (safe assist) / yellow (high-risk, high-reward) / red (collision) zones,
   and a short dotted preview shows roughly where that pull is about to send
   you — a few seconds ahead, not the whole flight.
-- Flight is pure gravity: the Sun and both planets each pull on the ship by
-  the inverse-square law, every frame, no scripted paths. Skim a yellow ring
-  for a strong assist; cross into red and it's a collision.
+- Flight is pure gravity: the Sun and all eight planets each pull on the
+  ship by the inverse-square law, every frame, no scripted paths. Skim a
+  yellow ring for a strong assist; cross into red and it's a collision.
+  Jupiter and Saturn are by far the strongest assists available — real mass
+  ratios mean Mercury/Venus/Mars barely nudge your trajectory, same as the
+  real solar system.
 - The HUD shows your speed against the escape speed needed at your current
   distance. Fall short and you'll curve back inward for another attempt
   instead of drifting out forever — that's real orbital mechanics, not a

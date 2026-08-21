@@ -36,7 +36,7 @@ const MAX_LAUNCH_SPEED = 380;
 
 const TRAIL_LENGTH = 140;
 const SHIP_RADIUS = 6;
-const DISTANCE_RING_STEP = 260;
+const DISTANCE_RING_STEP = 750; // roughly AU-spaced at this project's scale
 
 // The trajectory preview only looks this far ahead — a fuzzy near-term read,
 // not a solved answer. Anything beyond it (later flybys, the actual escape)
@@ -52,6 +52,10 @@ function toScreen(p: Vec2, scale: number): Vec2 {
 
 function screenDeltaToWorld(dx: number, dy: number, scale: number): Vec2 {
   return { x: dx / scale, y: dy / (scale * TILT) };
+}
+
+function capitalize(s: string): string {
+  return s.length ? s[0].toUpperCase() + s.slice(1) : s;
 }
 
 export default function SlingshotGame() {
@@ -290,14 +294,12 @@ export default function SlingshotGame() {
               <Stop offset="35%" stopColor="#ffd166" stopOpacity={0.5} />
               <Stop offset="100%" stopColor="#ffd166" stopOpacity={0} />
             </RadialGradient>
-            <RadialGradient id="innerGlow" cx="50%" cy="50%" r="50%">
-              <Stop offset="0%" stopColor="#8ecae6" stopOpacity={0.7} />
-              <Stop offset="100%" stopColor="#8ecae6" stopOpacity={0} />
-            </RadialGradient>
-            <RadialGradient id="outerGlow" cx="50%" cy="50%" r="50%">
-              <Stop offset="0%" stopColor="#ff8fa3" stopOpacity={0.7} />
-              <Stop offset="100%" stopColor="#ff8fa3" stopOpacity={0} />
-            </RadialGradient>
+            {PLANETS.map((p) => (
+              <RadialGradient key={`glow-${p.id}`} id={`glow-${p.id}`} cx="50%" cy="50%" r="50%">
+                <Stop offset="0%" stopColor={p.color} stopOpacity={0.65} />
+                <Stop offset="100%" stopColor={p.color} stopOpacity={0} />
+              </RadialGradient>
+            ))}
           </Defs>
 
           {STARS.map((s, i) => (
@@ -330,9 +332,9 @@ export default function SlingshotGame() {
             const risk = riskRadii(b);
             return (
               <React.Fragment key={`risk-${b.id}`}>
-                <Circle cx={s.x} cy={s.y} r={risk.safe * scale} stroke="#4ade80" strokeWidth={1} strokeOpacity={0.35} fill="none" />
-                <Circle cx={s.x} cy={s.y} r={risk.highRisk * scale} stroke="#ffd166" strokeWidth={1} strokeOpacity={0.4} fill="none" />
-                <Circle cx={s.x} cy={s.y} r={risk.crash * scale} stroke="#ff4d6d" strokeWidth={1.2} strokeOpacity={0.6} fill="none" />
+                <Ellipse cx={s.x} cy={s.y} rx={risk.safe * scale} ry={risk.safe * scale * TILT} stroke="#4ade80" strokeWidth={1} strokeOpacity={0.35} fill="none" />
+                <Ellipse cx={s.x} cy={s.y} rx={risk.highRisk * scale} ry={risk.highRisk * scale * TILT} stroke="#ffd166" strokeWidth={1} strokeOpacity={0.4} fill="none" />
+                <Ellipse cx={s.x} cy={s.y} rx={risk.crash * scale} ry={risk.crash * scale * TILT} stroke="#ff4d6d" strokeWidth={1.2} strokeOpacity={0.6} fill="none" />
               </React.Fragment>
             );
           })}
@@ -344,7 +346,7 @@ export default function SlingshotGame() {
           {bodiesRef.current.map((b) => {
             const s = toScreen(b.pos, scale);
             const r = Math.max(b.radius * scale, 2.5);
-            const glowId = b.id === 'sun' ? 'sunGlow' : b.id === 'inner' ? 'innerGlow' : 'outerGlow';
+            const glowId = b.id === 'sun' ? 'sunGlow' : `glow-${b.id}`;
             return (
               <React.Fragment key={b.id}>
                 <Circle cx={s.x} cy={s.y} r={r * 3.4} fill={`url(#${glowId})`} />
@@ -378,7 +380,9 @@ export default function SlingshotGame() {
 
         {phase === 'crashed' && (
           <View pointerEvents="none" style={styles.overlay}>
-            <Text style={styles.bigMessage}>Lost in {crashBody.current?.id === 'sun' ? 'the Sun' : `the ${crashBody.current?.id} flyby`}</Text>
+            <Text style={styles.bigMessage}>
+              Lost {crashBody.current?.id === 'sun' ? 'in the Sun' : `at ${capitalize(crashBody.current?.id ?? '')}`}
+            </Text>
             <Text style={styles.hint}>Tap to try again</Text>
           </View>
         )}
