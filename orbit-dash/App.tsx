@@ -1,12 +1,12 @@
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, StyleSheet } from 'react-native';
-import Game from './src/Game';
+import SlingshotGame from './src/SlingshotGame';
 
 export default function App() {
   return (
     <SafeAreaView style={styles.root}>
       <StatusBar style="light" />
-      <Game />
+      <SlingshotGame />
     </SafeAreaView>
   );
 }
@@ -14,6 +14,6 @@ export default function App() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#140a2e',
+    backgroundColor: '#0a0618',
   },
 });

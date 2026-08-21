@@ -1,12 +1,21 @@
 # Orbit Dash
 
-A one-tap casual arcade game built with Expo/React Native. Your dot orbits a
-central hub; gates spinning around the inner and outer ring block one lane at
-a time. Tap anywhere to switch orbit lane and dodge through. The pace ramps
-up the longer you survive, and your best score is saved on-device.
+A gravity-slingshot arcade game built with Expo/React Native. Drag back from
+Earth to launch a ship, then ride real Newtonian gravity — including
+gravity-assist flybys off the planets — as far out of the solar system as you
+can get.
 
 This is a standalone Expo app, independent of the other prototypes in this
 repo (`App.js` at the repo root, and `everworld/`).
+
+## Current state: bare physics prototype
+
+This build is deliberately minimal — one star, two planets on circular
+orbits, and a ship governed by real inverse-square gravity from all three.
+The goal right now is purely "does slingshotting feel good," before any of
+the zoom levels, game modes, hazards, or sound design in the full concept
+get layered on. See [Ideas for next passes](#ideas-for-next-passes) below
+for what's deliberately not built yet.
 
 ## Running it
 
@@ -21,22 +30,30 @@ preview.
 
 ## How it plays
 
-- **Tap** to swap between the inner and outer orbit.
-- Orange gates block exactly one of the two lanes as they sweep past — be on
-  the open lane when a gate reaches you.
-- Score increments for every gate you clear; hitting a blocked lane ends the
-  run.
-- Your best score persists locally via `@react-native-async-storage/async-storage`.
+- **Drag back** from the green launch pad (like a slingshot) and **release**
+  to launch the ship.
+- Flight is pure gravity: the Sun and both planets each pull on the ship by
+  the inverse-square law, every frame, no scripted paths.
+- Pass close to a planet with the right angle and you get a gravity-assist
+  turn — the trajectory bends and the ship picks up (or loses) speed
+  depending on the approach.
+- Fly outside the escape radius → **"Escaped the system!"**
+- Fly through the Sun or a planet → **"Crashed"**
+- Tap anywhere after a crash/escape to reset and aim again.
 
 ## Project structure
 
-- `App.tsx` — app shell (safe area, status bar), mounts `Game`.
-- `src/Game.tsx` — game state machine (ready / playing / game over), the
-  `requestAnimationFrame` loop driving orbit angle + obstacle spawning /
-  collision, and the `react-native-svg` rendering of rings, gates, and the
-  player.
-- `src/geometry.ts` — polar-to-cartesian and SVG arc-path helpers.
-- `src/storage.ts` — best-score persistence.
+- `App.tsx` — app shell (safe area, status bar), mounts `SlingshotGame`.
+- `src/orbitalPhysics.ts` — the physics: body definitions (Sun + planets),
+  gravity acceleration, collision detection, and a fixed-substep integrator.
+  Pure functions, no React — easy to unit test or retune independent of
+  rendering.
+- `src/SlingshotGame.tsx` — game state machine (aiming / flying / crashed /
+  escaped), the drag-to-launch gesture (`PanResponder`), the
+  `requestAnimationFrame` sim loop, and the `react-native-svg` rendering of
+  orbits, bodies, trail, and ship.
+- `src/geometry.ts` — polar/SVG-arc helpers, reused from the previous
+  tap-to-dodge prototype.
 
 ## Publishing
 
@@ -56,9 +73,32 @@ currently generated solid-color placeholders) with real game art, and update
 `app.json`'s `ios.bundleIdentifier` / `android.package` if you want a
 different bundle ID than `com.auberous.orbitdash`.
 
+## The full concept (not built yet)
+
+The design target this prototype is aimed at:
+
+- **Zoom levels**: Inner Solar System → Gas Giant Belt → Ice Giants → Kuiper
+  Zone → Interstellar Space, each wider, faster, and introducing new hazards
+  (comet tails, debris, radiation belts).
+- **Game modes**: Escape Mode (reach interstellar space), Endless Mode (best
+  distance), Challenge Mode (timed slingshots, precision arcs), Sandbox Mode
+  (tweak gravity/planet speed/rocket mass).
+- **Visual style**: minimalist neon-vector — glowing planet spheres, clean
+  arc trajectories, a simple triangle/capsule rocket. (The current prototype
+  already follows this direction.)
+- **Sound**: low-hum ambient space audio, rising tones under acceleration,
+  Doppler-shift on slingshots, quiet music in deep space.
+- **Self-balancing design insight**: a botched slingshot loses speed, which
+  drops the ship back inward, which creates another slingshot opportunity —
+  forgiving without being easy.
+
 ## Ideas for next passes
 
-- Difficulty variants (double gates, moving gates).
-- Combo/streak scoring, particle burst on lane switch.
-- Leaderboard / cloud high scores.
-- Sound + haptics on lane switch and collision.
+1. Tune gravity/mass/power constants further — first pass already produces
+   real curving flybys and escapes, but wants more playtesting.
+2. Best-distance persistence (was AsyncStorage-backed in the previous
+   prototype; removed since there's no scoring loop yet).
+3. A second, more distant planet pass and a widening camera as the ship
+   gets farther out — first step toward the zoom levels.
+4. Endless Mode scoring (distance reached / bodies passed).
+5. Sound + haptics on launch, flyby, crash.
