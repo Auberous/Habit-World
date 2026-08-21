@@ -51,8 +51,10 @@ export const PLANETS: PlanetDef[] = [
 ];
 
 export const LAUNCH_PAD: Vec2 = { x: 0, y: -360 };
-export const VIEW_RADIUS = 460; // world units from origin shown at the board edge
-export const ESCAPE_RADIUS = 430;
+export const VIEW_RADIUS = 460; // world units from origin shown at the board edge when un-zoomed
+// Deliberately far past the planets: reaching it means surviving a genuine
+// multi-slingshot outbound coast, not one lucky close pass.
+export const ESCAPE_RADIUS = 1250;
 
 const MIN_GRAVITY_DIST = 6;
 
