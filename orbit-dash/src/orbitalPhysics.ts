@@ -57,6 +57,22 @@ export const VIEW_RADIUS = 460; // world units from origin shown at the board ed
 export const ESCAPE_RADIUS = 1250;
 
 const MIN_GRAVITY_DIST = 6;
+export const COLLISION_MARGIN = 6;
+
+/** Risk-zone radii around a body, for both collision checks and the on-screen rings. */
+export function riskRadii(body: { radius: number }) {
+  const crash = body.radius + COLLISION_MARGIN;
+  return {
+    crash, // red: inside this is a collision
+    highRisk: crash * 2.3, // yellow: big assist, real risk
+    safe: crash * 4.6, // green: gentle, reliable assist
+  };
+}
+
+/** Local escape speed at distance r from the Sun alone (vis-viva, v_esc = sqrt(2GM/r)). */
+export function localEscapeSpeed(distFromSun: number): number {
+  return Math.sqrt((2 * G * SUN.mass) / Math.max(distFromSun, MIN_GRAVITY_DIST));
+}
 
 export function planetPosition(def: PlanetDef, t: number): Vec2 {
   const a = def.phase0 + def.angularSpeed * t;

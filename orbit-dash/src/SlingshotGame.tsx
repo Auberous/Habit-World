@@ -7,7 +7,9 @@ import {
   ESCAPE_RADIUS,
   integrateShip,
   LAUNCH_PAD,
+  localEscapeSpeed,
   PLANETS,
+  riskRadii,
   VIEW_RADIUS,
   vLen,
   type BodyState,
@@ -35,6 +37,12 @@ const MAX_LAUNCH_SPEED = 380;
 const TRAIL_LENGTH = 140;
 const SHIP_RADIUS = 6;
 const DISTANCE_RING_STEP = 260;
+
+// The trajectory preview only looks this far ahead — a fuzzy near-term read,
+// not a solved answer. Anything beyond it (later flybys, the actual escape)
+// still has to be learned by flying it.
+const PREVIEW_SECONDS = 2.6;
+const PREVIEW_DT = 1 / 20;
 
 const STARS = generateStars(160);
 
@@ -175,6 +183,7 @@ export default function SlingshotGame() {
   const scale = cameraScale.current;
   const shipScreen = toScreen(shipPos.current, scale);
   const speed = vLen(shipVel.current);
+  const escapeSpeedHere = localEscapeSpeed(vLen(shipPos.current));
   const heading = Math.atan2(shipVel.current.y, shipVel.current.x);
   const shipTipAngle = phase === 'aiming' && aimDrag ? Math.atan2(-aimDrag.y, -aimDrag.x) : heading;
 
@@ -197,6 +206,50 @@ export default function SlingshotGame() {
     const ctrl = { x: mid.x + (perp.x / perpLen) * sag, y: mid.y + (perp.y / perpLen) * sag };
     return `M ${launchScreen.x} ${launchScreen.y} Q ${ctrl.x} ${ctrl.y} ${aimEnd.x} ${aimEnd.y}`;
   }, [aimDrag, aimEnd, launchScreen.x, launchScreen.y, dragLen]);
+
+  // Fuzzy near-term preview: simulate the actual candidate launch forward a
+  // short, fixed horizon using real (moving) planet positions. Deliberately
+  // cut short — it teaches "where will the planet be", not the whole flight.
+  const previewPoints = useMemo(() => {
+    if (phase !== 'aiming' || !aimDrag) return null;
+    const len = vLen(aimDrag);
+    if (len <= 6) return null;
+    const factor = Math.tanh(len / DRAG_SOFTNESS);
+    const dir = { x: -aimDrag.x / len, y: -aimDrag.y / len };
+    let pos = { ...LAUNCH_PAD };
+    let vel = { x: dir.x * MAX_LAUNCH_SPEED * factor, y: dir.y * MAX_LAUNCH_SPEED * factor };
+    let t = simTime.current;
+    const points: Vec2[] = [pos];
+    const steps = Math.round(PREVIEW_SECONDS / PREVIEW_DT);
+    for (let i = 0; i < steps; i++) {
+      const result = integrateShip(pos, vel, t, PREVIEW_DT, 2);
+      pos = result.pos;
+      vel = result.vel;
+      t = result.t;
+      points.push(pos);
+      if (result.collidedWith) break;
+    }
+    return points;
+  }, [phase, aimDrag]);
+
+  const previewSegments = useMemo(() => {
+    if (!previewPoints || previewPoints.length < 2) return [];
+    const chunkCount = 4;
+    const chunkSize = Math.ceil(previewPoints.length / chunkCount);
+    const segments: { points: string; opacity: number }[] = [];
+    for (let c = 0; c < chunkCount; c++) {
+      const start = Math.max(0, c * chunkSize - 1);
+      const end = Math.min(previewPoints.length, (c + 1) * chunkSize);
+      if (end - start < 2) continue;
+      const slice = previewPoints.slice(start, end);
+      const pts = slice.map((p) => {
+        const s = toScreen(p, scale);
+        return `${s.x},${s.y}`;
+      }).join(' ');
+      segments.push({ points: pts, opacity: 0.5 - c * 0.1 });
+    }
+    return segments;
+  }, [previewPoints, scale]);
 
   const distanceRings = useMemo(() => {
     const rings: number[] = [];
@@ -224,7 +277,10 @@ export default function SlingshotGame() {
       <View style={styles.center}>
         <View style={styles.hud}>
           <Text style={styles.hudTitle}>Voyager</Text>
-          <Text style={styles.hudSub}>speed {speed.toFixed(0)} · dist {vLen(shipPos.current).toFixed(0)} / {ESCAPE_RADIUS}</Text>
+          <Text style={styles.hudSub}>dist {vLen(shipPos.current).toFixed(0)} / {ESCAPE_RADIUS}</Text>
+          <Text style={[styles.hudSub, speed >= escapeSpeedHere ? styles.hudGood : styles.hudBad]}>
+            speed {speed.toFixed(0)} · escape needs {escapeSpeedHere.toFixed(0)}
+          </Text>
         </View>
 
         <Svg width={BOARD_SIZE} height={BOARD_SIZE}>
@@ -268,6 +324,22 @@ export default function SlingshotGame() {
           {phase === 'flying' && trail.current.length > 1 && (
             <Polyline points={trailPoints} stroke="#4ade80" strokeWidth={1.5} fill="none" opacity={0.5} />
           )}
+
+          {phase === 'aiming' && bodiesRef.current.map((b) => {
+            const s = toScreen(b.pos, scale);
+            const risk = riskRadii(b);
+            return (
+              <React.Fragment key={`risk-${b.id}`}>
+                <Circle cx={s.x} cy={s.y} r={risk.safe * scale} stroke="#4ade80" strokeWidth={1} strokeOpacity={0.35} fill="none" />
+                <Circle cx={s.x} cy={s.y} r={risk.highRisk * scale} stroke="#ffd166" strokeWidth={1} strokeOpacity={0.4} fill="none" />
+                <Circle cx={s.x} cy={s.y} r={risk.crash * scale} stroke="#ff4d6d" strokeWidth={1.2} strokeOpacity={0.6} fill="none" />
+              </React.Fragment>
+            );
+          })}
+
+          {previewSegments.map((seg, i) => (
+            <Polyline key={i} points={seg.points} stroke="#c9d6ff" strokeWidth={1.5} strokeDasharray="2,5" fill="none" opacity={seg.opacity} />
+          ))}
 
           {bodiesRef.current.map((b) => {
             const s = toScreen(b.pos, scale);
@@ -348,6 +420,12 @@ const styles = StyleSheet.create({
     color: '#9b8fc4',
     marginTop: 2,
     fontVariant: ['tabular-nums'],
+  },
+  hudGood: {
+    color: '#4ade80',
+  },
+  hudBad: {
+    color: '#ff9f43',
   },
   overlay: {
     position: 'absolute',

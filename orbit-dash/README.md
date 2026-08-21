@@ -8,14 +8,31 @@ can get.
 This is a standalone Expo app, independent of the other prototypes in this
 repo (`App.js` at the repo root, and `everworld/`).
 
-## Current state: bare physics prototype
+## Current state: a skill loop, not a fire-and-forget prototype
 
-This build is deliberately minimal — one star, two planets on circular
-orbits, and a ship governed by real inverse-square gravity from all three.
-The goal right now is purely "does slingshotting feel good," before any of
-the zoom levels, game modes, hazards, or sound design in the full concept
-get layered on. See [Ideas for next passes](#ideas-for-next-passes) below
-for what's deliberately not built yet.
+One star, two planets on circular orbits, a ship under real inverse-square
+gravity from all three — and, on top of that physics core, the pieces that
+turn it from "drag and watch" into something you have to learn:
+
+- **Risk-zone rings** around every body while aiming: green (safe, small
+  assist), yellow (bigger assist, real risk), red (collision). Skimming the
+  yellow ring without crossing into red is the actual skill.
+- **Fuzzy trajectory preview**: a short, dotted, fading preview line shows
+  where your current pull is about to send the ship — but only ~2.6 seconds
+  ahead. Anything past that (later flybys, whether you actually escape)
+  isn't solved for you; you have to fly it and learn to lead the planets.
+- **Escape-velocity readout**: the HUD shows your current speed against the
+  local escape speed (`sqrt(2GM/r)`) at your distance from the Sun, colored
+  green/orange. This is what actually gates progress outward — it's not a
+  scripted checkpoint, it's the real orbital-mechanics threshold, so a weak
+  launch will legitimately fall back inward for another attempt.
+- **Rubber-band launch** with a much bigger, cinematic scale and a camera
+  that zooms out as you travel (see below) — unchanged from the previous
+  pass.
+
+See [Ideas for next passes](#ideas-for-next-passes) for the parts of the
+full design (fuel/thrust bursts, launch windows, capture-into-orbit,
+checkpoints) that are deliberately not built yet.
 
 ## Running it
 
@@ -30,26 +47,36 @@ preview.
 
 ## How it plays
 
-- **Drag back** from the green launch pad (like a slingshot) and **release**
-  to launch the ship.
+- **Pull back** from the green launch pad like a slingshot — the elastic
+  gets visibly harder to stretch the farther you pull (diminishing returns,
+  not a linear power bar) — and **release** to launch.
+- While aiming: colored rings around the Sun and each planet show green
+  (safe assist) / yellow (high-risk, high-reward) / red (collision) zones,
+  and a short dotted preview shows roughly where that pull is about to send
+  you — a few seconds ahead, not the whole flight.
 - Flight is pure gravity: the Sun and both planets each pull on the ship by
-  the inverse-square law, every frame, no scripted paths.
-- Pass close to a planet with the right angle and you get a gravity-assist
-  turn — the trajectory bends and the ship picks up (or loses) speed
-  depending on the approach.
-- Fly outside the escape radius → **"Escaped the system!"**
-- Fly through the Sun or a planet → **"Crashed"**
+  the inverse-square law, every frame, no scripted paths. Skim a yellow ring
+  for a strong assist; cross into red and it's a collision.
+- The HUD shows your speed against the escape speed needed at your current
+  distance. Fall short and you'll curve back inward for another attempt
+  instead of drifting out forever — that's real orbital mechanics, not a
+  scripted wall.
+- Cross the escape radius while still above local escape speed →
+  **"Escape velocity reached."** Fly through the Sun or a planet's collision
+  radius → **"Lost in the [body] flyby."**
 - Tap anywhere after a crash/escape to reset and aim again.
 
 ## Project structure
 
 - `App.tsx` — app shell (safe area, status bar), mounts `SlingshotGame`.
 - `src/orbitalPhysics.ts` — the physics: body definitions (Sun + planets),
-  gravity acceleration, collision detection, and a fixed-substep integrator.
-  Pure functions, no React — easy to unit test or retune independent of
-  rendering.
+  gravity acceleration, collision detection, a fixed-substep integrator,
+  risk-ring radii, and the local escape-speed formula. Pure functions, no
+  React — easy to unit test or retune independent of rendering.
 - `src/SlingshotGame.tsx` — game state machine (aiming / flying / crashed /
-  escaped), the drag-to-launch gesture (`PanResponder`), the
+  escaped), the drag-to-launch gesture (`PanResponder`), the fuzzy
+  trajectory preview (a short forward simulation re-run on every pointer
+  move), the
   `requestAnimationFrame` sim loop, and the `react-native-svg` rendering of
   orbits, bodies, trail, and ship.
 - `src/geometry.ts` — polar/SVG-arc helpers, reused from the previous
@@ -94,11 +121,23 @@ The design target this prototype is aimed at:
 
 ## Ideas for next passes
 
-1. Tune gravity/mass/power constants further — first pass already produces
-   real curving flybys and escapes, but wants more playtesting.
-2. Best-distance persistence (was AsyncStorage-backed in the previous
-   prototype; removed since there's no scoring loop yet).
-3. A second, more distant planet pass and a widening camera as the ship
-   gets farther out — first step toward the zoom levels.
-4. Endless Mode scoring (distance reached / bodies passed).
-5. Sound + haptics on launch, flyby, crash.
+From the mastery-loop design pass, deliberately deferred so each lands as
+its own reviewable change rather than one large rewrite:
+
+1. **Fuel/thrust bursts** — a finite fuel bar for mid-flight course
+   corrections, with periapsis burns worth far more than burns elsewhere.
+   Needs its own bit of UI (fuel bar) and state (burn input during flight).
+2. **Launch windows/optimal cone** — restrict launch to a narrow angle range
+   depending on where the planets currently are, instead of any angle being
+   launchable at any time.
+3. **Capture-into-orbit as a third failure mode** — right now every mistake
+   is either a crash or a fall-back for another attempt; a "weak flyby traps
+   you in orbit, burn remaining fuel to break free" state needs fuel to
+   exist first.
+4. **Checkpoints + failure hints** — remember progress within a run and
+   surface what went wrong ("too shallow", "too fast") instead of a flat
+   restart.
+5. Best-distance persistence, Endless Mode scoring, sound + haptics (from
+   the previous pass, still open).
+6. The zoom levels / game modes / sound design from the original full
+   concept (see above) remain the long-range target.
