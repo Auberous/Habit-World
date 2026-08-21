@@ -59,6 +59,20 @@ world grow), not a finished app. Still to build:
    not just count).
 6. **Capacitor wrap** for iOS/Android once the core loop feels right.
 7. **Notifications / reminders** — native-only feature, phase 2.
+8. ~~**Ambient motion**~~ — done: trees/bushes sway, animals wander continuously
+   (not just a one-shot walk-in), birds fly real loops on a motion path, the river
+   flows (animated dash offset) and can spill into a waterfall once mountains are
+   tall enough, villagers get a repeating hammering gesture, mountains scale with
+   overall vitality (with snow caps at the top tier), and a rain + rainbow moment
+   appears at max sky level. All CSS-driven (`worldRenderer.ts`'s `AnimCtx` helpers) —
+   `renderWorldSvg` is still a pure, cheap function; the browser's compositor does
+   the actual animating, no render loop needed.
+9. **Real fidelity jump** (rigged/lifelike creature motion, true depth/lighting) —
+   the next tier up from (8)'s CSS-driven motion. Two directions discussed and not
+   yet decided: swap creatures for Rive-animated vector characters (stays in this
+   2D engine), or move to a real low-poly 3D engine (Babylon.js) with free CC0
+   asset packs (Kenney/Quaternius) + Mixamo-animated townsfolk. Bigger investment
+   either way — needs a decision before starting.
 
 ## Design intent (for whoever picks this up)
 
