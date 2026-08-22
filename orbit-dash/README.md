@@ -59,8 +59,17 @@ from "drag and watch" into something you have to learn:
   preview, not a guess.
 - **A plan you can adjust mid-flight**: two correction burns per run — a
   fixed prograde delta-v, tap to use — mean one aim isn't the whole plan.
-  The camera also gradually recenters on the ship itself once it's genuinely
-  far from the Sun, so a deep-space ship never gets lost near the frame edge.
+  Deliberately small: a burn alone can never bridge the gap to escape
+  velocity, so it's a nudge for a mostly-working trajectory, not a way to
+  skip needing a real gravity assist. The camera also gradually recenters
+  on the ship itself once it's genuinely far from the Sun, so a deep-space
+  ship never gets lost near the frame edge.
+- **Assists are obviously rewarding now**: the instant a flyby ends (you
+  enter and then leave a body's colored risk zone), a floating callout —
+  "+103 — Venus assist" in green, or an orange "−186 — the Sun assist" for
+  a pass that cost you speed — appears right where it happened. You learn
+  which bodies are actually worth chasing (Jupiter and Saturn dwarf
+  everything else) by watching the numbers, not by reading this README.
 
 See [Ideas for next passes](#ideas-for-next-passes) for the parts of the
 full design (fuel bar / continuous thrust rather than discrete burns,
@@ -97,16 +106,18 @@ preview.
   and a short dotted preview shows roughly where that pull is about to send
   you — a few seconds ahead, not the whole flight.
 - **Mid-flight, tap "🔥 Burn"** (twice per run) to add a fixed prograde
-  delta-v in your current direction of travel — a real correction, not just
-  a do-over. The camera also gradually shifts from Sun-centered to
-  ship-centered the farther out you get, so you can always see where you
-  actually are.
+  delta-v in your current direction of travel — a small correction, not a
+  shortcut around needing an assist. The camera also gradually shifts from
+  Sun-centered to ship-centered the farther out you get, so you can always
+  see where you actually are.
 - Flight is pure gravity: the Sun and all eight planets each pull on the
   ship by the inverse-square law, every frame, no scripted paths. Skim a
   yellow ring for a strong assist; cross into red and it's a collision.
   Jupiter and Saturn are by far the strongest assists available — real mass
   ratios mean Mercury/Venus/Mars barely nudge your trajectory, same as the
-  real solar system.
+  real solar system. The instant a flyby ends, a floating callout at that
+  spot tells you exactly what it was worth — "+340 — Jupiter assist" in
+  green, or an orange loss if the pass cost you speed.
 - The HUD shows your speed against the escape speed needed at your current
   distance. Fall short and you'll curve back inward for another attempt
   instead of drifting out forever — that's real orbital mechanics, not a
@@ -132,10 +143,13 @@ preview.
   intro camera zoom (and the Sun-to-ship follow blend once far out), the
   launch-window fast-forward loop and ghost-marker future positions, the
   fuzzy trajectory preview (a short forward simulation re-run on every
-  pointer move), correction burns, the `requestAnimationFrame` sim loop,
-  and the `react-native-svg` rendering of orbits, bodies, trail, and the
-  ship (hull + engine flame + cockpit, not a bare triangle). The
-  fast-forward/burn buttons are deliberately structural siblings of the
+  pointer move), correction burns, flyby detection for the assist-callout
+  feedback (tracks entering/leaving each body's "safe" ring, including the
+  overlapping-zones case — the Sun's own zone is bigger than the launch
+  pad's distance from it), the `requestAnimationFrame` sim loop, and the
+  `react-native-svg` rendering of orbits, bodies, trail, and the ship (hull
+  + engine flame + cockpit, not a bare triangle). The fast-forward/burn
+  buttons are deliberately structural siblings of the
   drag-responder view, not nested inside it, so their taps aren't swallowed
   by the full-screen `PanResponder`.
 - `src/geometry.ts` — polar/SVG-arc helpers, reused from the previous
@@ -180,35 +194,32 @@ The design target this prototype is aimed at:
 
 ## Ideas for next passes
 
-From the "what makes this addictive" and "how do I strategize" design
-passes — the reward loop (persisted best distance, named milestones),
-launch-window preview (fast-forward + ghost markers), correction burns, and
-the ship-following camera have all landed. Still deliberately deferred,
-each meant to land as its own reviewable change rather than one large
-rewrite:
+From the "what makes this addictive", "how do I strategize", and "make
+gravity assists obvious and fun" design passes — the reward loop (persisted
+best distance, named milestones), launch-window preview (fast-forward +
+ghost markers), correction burns (deliberately too weak to substitute for
+a real assist), the ship-following camera, and the assist-callout feedback
+have all landed. Still deliberately deferred, each meant to land as its
+own reviewable change rather than one large rewrite:
 
-1. **In-flight assist feedback** — a floating "+340 km/s — Jupiter assist"
-   callout and a visual pulse the instant a close pass pays off, so a good
-   slingshot is rewarding in the moment, not just reflected in the final
-   distance number.
-2. **Fuel bar / continuous thrust** — the current two correction burns are
+1. **Fuel bar / continuous thrust** — the current two correction burns are
    discrete fixed-Δv charges; a real fuel gauge with variable-length burns
    (and periapsis burns worth far more than burns elsewhere) is the fuller
    version of the same idea.
-3. **Launch-angle windows** — restrict launch to a narrow angle range
+2. **Launch-angle windows** — restrict launch to a narrow angle range
    depending on where the planets currently are, instead of any angle being
    launchable at any time. The fast-forward preview already lets you *wait*
    for a good window; this would make picking the wrong window a real
    constraint, not just a suboptimal choice.
-4. **Capture-into-orbit as a third failure mode** — right now every mistake
+3. **Capture-into-orbit as a third failure mode** — right now every mistake
    is either a crash or a fall-back for another attempt; a "weak flyby traps
    you in orbit, burn remaining fuel to break free" state fits naturally
-   once burns feel more fuel-like (see #2).
-5. **Checkpoints + failure hints** — remember progress within a run and
+   once burns feel more fuel-like (see #1).
+4. **Checkpoints + failure hints** — remember progress within a run and
    surface what went wrong ("too shallow", "too fast") instead of a flat
    restart.
-6. **Retention hooks** — a daily challenge seed (same planet phases each
+5. **Retention hooks** — a daily challenge seed (same planet phases each
    day, shareable/comparable like Wordle) and cosmetic unlocks spent from
    mission points, once there's a currency to spend.
-7. The zoom levels / game modes / sound design from the original full
+6. The zoom levels / game modes / sound design from the original full
    concept (see above) remain the long-range target.

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dimensions, Pressable, StyleSheet, Text, View, type GestureResponderEvent, type PanResponderGestureState } from 'react-native';
 import { PanResponder } from 'react-native';
-import Svg, { Circle, Defs, Ellipse, G, Line, LinearGradient, Path, Polygon, Polyline, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Ellipse, G, Line, LinearGradient, Path, Polygon, Polyline, RadialGradient, Stop, Text as SvgText } from 'react-native-svg';
 import {
   computeBodies,
   ESCAPE_RADIUS,
@@ -14,6 +14,7 @@ import {
   riskRadii,
   VIEW_RADIUS,
   vLen,
+  vSub,
   type BodyState,
   type Vec2,
 } from './orbitalPhysics';
@@ -64,10 +65,16 @@ const GHOST_LEAD_SECONDS = 10;
 // the same thing a real mission designer does when picking a launch window.
 const FAST_FORWARD_SPEED = 40;
 
-// Two correction burns per flight: a fixed prograde delta-v, so a single
-// aim isn't the whole plan — you can adjust once you see how it's going.
+// Two correction burns per flight: a fixed prograde delta-v. Deliberately
+// small — a burn alone (from a straight, unassisted launch) can never
+// close the gap to escape velocity; it's a nudge for a trajectory that's
+// already mostly working, not a way to skip needing a real gravity assist.
+// (This falls naturally out of the same physics as a real Oberth
+// maneuver: delta-v added at high speed near a body buys far more energy
+// than the same delta-v added anywhere else, so a burn during a genuine
+// close flyby is worth much more than the raw number below suggests.)
 const BURN_CHARGES = 2;
-const BURN_DELTA_V = 70;
+const BURN_DELTA_V = 22;
 
 // The camera stays Sun-centered through the inner system (where the risk
 // rings/preview matter most), then eases into following the ship itself
@@ -76,7 +83,19 @@ const BURN_DELTA_V = 70;
 const FOLLOW_START_DIST = 500;
 const FOLLOW_FULL_DIST = 2200;
 
+// Assist feedback: the speed change between entering and leaving a body's
+// "safe" risk ring, called out the instant a flyby ends — so a good
+// slingshot is obviously rewarding right when it happens, not just a curve
+// on a line you have to infer credit from.
+const ASSIST_CALLOUT_MS = 2200;
+const ASSIST_MIN_DELTA = 8;
+const ASSIST_RISE_PX = 26;
+
 const STARS = generateStars(160);
+
+function bodyDisplayName(id: string): string {
+  return id === 'sun' ? 'the Sun' : capitalize(id);
+}
 
 function toScreen(p: Vec2, scale: number, center: Vec2): Vec2 {
   return { x: CENTER + (p.x - center.x) * scale, y: CENTER + (p.y - center.y) * scale * TILT };
@@ -97,6 +116,7 @@ export default function SlingshotGame() {
   const [bestDistance, setBestDistance] = useState(0);
   const [isNewRecord, setIsNewRecord] = useState(false);
   const [milestoneToast, setMilestoneToast] = useState<{ text: string; startedAt: number } | null>(null);
+  const [assistCallout, setAssistCallout] = useState<{ text: string; pos: Vec2; positive: boolean; startedAt: number } | null>(null);
 
   const shipPos = useRef<Vec2>({ ...LAUNCH_PAD });
   const shipVel = useRef<Vec2>({ x: 0, y: 0 });
@@ -114,6 +134,8 @@ export default function SlingshotGame() {
   const burnsRef = useRef(BURN_CHARGES);
   const [burnsRemaining, setBurnsRemaining] = useState(BURN_CHARGES);
   const ffRafRef = useRef<number | null>(null);
+  const flybyRef = useRef<{ bodyId: string; enterSpeed: number } | null>(null);
+  const assistExpiryRef = useRef(0);
 
   useEffect(() => {
     loadBestDistance().then((d) => {
@@ -209,6 +231,51 @@ export default function SlingshotGame() {
       setMilestoneToast(null);
     }
 
+    // Assist feedback: find the closest body whose "safe" ring the ship is
+    // currently inside (if any), and report the net speed change the
+    // instant that flyby ends.
+    let insideBody: BodyState | null = null;
+    let insideDist = Infinity;
+    for (const b of bodiesRef.current) {
+      const d = vLen(vSub(b.pos, result.pos));
+      if (d <= riskRadii(b).safe && d < insideDist) {
+        insideBody = b;
+        insideDist = d;
+      }
+    }
+    const nowSpeed = vLen(result.vel);
+    const reportFlybyEnd = (bodyId: string, enterSpeed: number) => {
+      const delta = nowSpeed - enterSpeed;
+      if (Math.abs(delta) >= ASSIST_MIN_DELTA) {
+        const sign = delta >= 0 ? '+' : '';
+        assistExpiryRef.current = performance.now() + ASSIST_CALLOUT_MS;
+        setAssistCallout({
+          text: `${sign}${delta.toFixed(0)} — ${bodyDisplayName(bodyId)} assist`,
+          pos: { ...result.pos },
+          positive: delta >= 0,
+          startedAt: performance.now(),
+        });
+      }
+    };
+    if (insideBody) {
+      if (!flybyRef.current) {
+        flybyRef.current = { bodyId: insideBody.id, enterSpeed: nowSpeed };
+      } else if (flybyRef.current.bodyId !== insideBody.id) {
+        // Zones overlap (e.g. the Sun's is bigger than the launch pad's own
+        // distance from it) — report the body we're leaving before we
+        // start tracking the new one, instead of silently dropping it.
+        reportFlybyEnd(flybyRef.current.bodyId, flybyRef.current.enterSpeed);
+        flybyRef.current = { bodyId: insideBody.id, enterSpeed: nowSpeed };
+      }
+    } else if (flybyRef.current) {
+      reportFlybyEnd(flybyRef.current.bodyId, flybyRef.current.enterSpeed);
+      flybyRef.current = null;
+    }
+    if (assistExpiryRef.current && performance.now() > assistExpiryRef.current) {
+      assistExpiryRef.current = 0;
+      setAssistCallout(null);
+    }
+
     const finishRun = () => {
       if (maxDistReached.current > bestDistanceRef.current) {
         bestDistanceRef.current = maxDistReached.current;
@@ -219,6 +286,7 @@ export default function SlingshotGame() {
         setIsNewRecord(false);
       }
       setMilestoneToast(null);
+      setAssistCallout(null);
     };
 
     if (result.collidedWith) {
@@ -256,6 +324,9 @@ export default function SlingshotGame() {
     cameraCenter.current = { x: 0, y: 0 };
     burnsRef.current = BURN_CHARGES;
     setBurnsRemaining(BURN_CHARGES);
+    flybyRef.current = null;
+    assistExpiryRef.current = 0;
+    setAssistCallout(null);
     setAimDrag(null);
     setPhase('flying');
     lastTsRef.current = null;
@@ -376,6 +447,11 @@ export default function SlingshotGame() {
     const s = toScreen(p, scale, center);
     return `${s.x},${s.y}`;
   }).join(' ');
+
+  const assistElapsed = assistCallout ? performance.now() - assistCallout.startedAt : 0;
+  const assistProgress = Math.min(1, assistElapsed / ASSIST_CALLOUT_MS);
+  const assistOpacity = assistCallout ? 1 - assistProgress : 0;
+  const assistScreen = assistCallout ? toScreen(assistCallout.pos, scale, center) : null;
 
   const launchScreen = toScreen(LAUNCH_PAD, scale, center);
   const dragLen = aimDrag ? vLen(aimDrag) : 0;
@@ -590,6 +666,20 @@ export default function SlingshotGame() {
               />
               {phase === 'flying' && <Circle cx={0.55} cy={0} r={0.3} fill="#2c3e6b" />}
             </G>
+          )}
+
+          {assistCallout && assistScreen && (
+            <SvgText
+              x={assistScreen.x}
+              y={assistScreen.y - 16 - assistProgress * ASSIST_RISE_PX}
+              fill={assistCallout.positive ? '#4ade80' : '#ff9f43'}
+              fontSize={14}
+              fontWeight="bold"
+              textAnchor="middle"
+              opacity={assistOpacity}
+            >
+              {assistCallout.text}
+            </SvgText>
           )}
         </Svg>
 
