@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dimensions, StyleSheet, Text, View, type GestureResponderEvent, type PanResponderGestureState } from 'react-native';
 import { PanResponder } from 'react-native';
-import Svg, { Circle, Defs, Ellipse, Path, Polygon, Polyline, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, Polyline, RadialGradient, Stop } from 'react-native-svg';
 import {
   computeBodies,
   ESCAPE_RADIUS,
@@ -41,6 +41,12 @@ const MAX_LAUNCH_SPEED = 380;
 const TRAIL_LENGTH = 140;
 const SHIP_RADIUS = 6;
 const DISTANCE_RING_STEP = 750; // roughly AU-spaced at this project's scale
+
+// Camera opens wide enough to see out past Saturn so you can actually
+// strategize the shot, then eases in to the tight aiming view once you
+// touch down to drag — the wide view is for planning, not for throwing.
+const OVERVIEW_RADIUS = 1700;
+const INTRO_ZOOM_MS = 1700;
 
 // The trajectory preview only looks this far ahead — a fuzzy near-term read,
 // not a solved answer. Anything beyond it (later flybys, the actual escape)
@@ -91,7 +97,42 @@ export default function SlingshotGame() {
   }, []);
 
   const baselineScale = BOARD_SIZE / (2 * VIEW_RADIUS);
-  const cameraScale = useRef(baselineScale);
+  const overviewScale = BOARD_SIZE / (2 * OVERVIEW_RADIUS);
+  const cameraScale = useRef(overviewScale);
+  const introRafRef = useRef<number | null>(null);
+
+  const stopIntroZoom = useCallback(() => {
+    if (introRafRef.current != null) cancelAnimationFrame(introRafRef.current);
+    introRafRef.current = null;
+  }, []);
+
+  const snapToAimScale = useCallback(() => {
+    stopIntroZoom();
+    cameraScale.current = baselineScale;
+    setRenderTick((n) => n + 1);
+  }, [stopIntroZoom, baselineScale]);
+
+  const startIntroZoom = useCallback(() => {
+    stopIntroZoom();
+    cameraScale.current = overviewScale;
+    const startTs = performance.now();
+    const step = (ts: number) => {
+      const t = Math.min((ts - startTs) / INTRO_ZOOM_MS, 1);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      cameraScale.current = overviewScale + (baselineScale - overviewScale) * eased;
+      setRenderTick((n) => n + 1);
+      introRafRef.current = t < 1 ? requestAnimationFrame(step) : null;
+    };
+    introRafRef.current = requestAnimationFrame(step);
+  }, [stopIntroZoom, baselineScale, overviewScale]);
+
+  // Runs once on mount — intentionally not re-triggered by startIntroZoom
+  // identity changes, since baselineScale/overviewScale never change after
+  // BOARD_SIZE is fixed at module load.
+  useEffect(() => {
+    startIntroZoom();
+    return stopIntroZoom;
+  }, [startIntroZoom, stopIntroZoom]);
 
   const stopLoop = useCallback(() => {
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
@@ -182,8 +223,9 @@ export default function SlingshotGame() {
     setAimDrag(null);
     setPhase('flying');
     lastTsRef.current = null;
+    stopIntroZoom();
     rafRef.current = requestAnimationFrame(tick);
-  }, [tick]);
+  }, [tick, stopIntroZoom]);
 
   const resetToAiming = useCallback(() => {
     stopLoop();
@@ -195,12 +237,12 @@ export default function SlingshotGame() {
     firedMilestones.current = new Set();
     toastExpiryRef.current = 0;
     setMilestoneToast(null);
-    cameraScale.current = baselineScale;
     bodiesRef.current = computeBodies(simTime.current);
     setAimDrag(null);
     setPhase('aiming');
+    startIntroZoom();
     setRenderTick((n) => n + 1);
-  }, [stopLoop, baselineScale]);
+  }, [stopLoop, startIntroZoom]);
 
   const panResponder = useMemo(
     () =>
@@ -210,6 +252,12 @@ export default function SlingshotGame() {
         onPanResponderGrant: () => {
           if (phase !== 'aiming' && phase !== 'flying') {
             resetToAiming();
+            return;
+          }
+          if (phase === 'aiming') {
+            // Touching down to actually aim ends the wide overview and
+            // commits to the tight, precisely-tuned drag scale.
+            snapToAimScale();
           }
         },
         onPanResponderMove: (_evt: GestureResponderEvent, gesture: PanResponderGestureState) => {
@@ -231,7 +279,7 @@ export default function SlingshotGame() {
           });
         },
       }),
-    [phase, launch, resetToAiming]
+    [phase, launch, resetToAiming, snapToAimScale]
   );
 
   const scale = cameraScale.current;
@@ -313,18 +361,8 @@ export default function SlingshotGame() {
     return rings;
   }, [scale]);
 
-  const shipTriangle = useMemo(() => {
-    const p1 = { x: shipScreen.x + Math.cos(shipTipAngle) * SHIP_RADIUS * 1.9, y: shipScreen.y + Math.sin(shipTipAngle) * SHIP_RADIUS * 1.9 };
-    const p2 = {
-      x: shipScreen.x + Math.cos(shipTipAngle + 2.5) * SHIP_RADIUS,
-      y: shipScreen.y + Math.sin(shipTipAngle + 2.5) * SHIP_RADIUS,
-    };
-    const p3 = {
-      x: shipScreen.x + Math.cos(shipTipAngle - 2.5) * SHIP_RADIUS,
-      y: shipScreen.y + Math.sin(shipTipAngle - 2.5) * SHIP_RADIUS,
-    };
-    return `${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`;
-  }, [shipScreen.x, shipScreen.y, shipTipAngle]);
+  const shipRotationDeg = (shipTipAngle * 180) / Math.PI;
+  const flameLength = Math.min(1.1, 0.4 + speed / 260);
 
   return (
     <View style={styles.fill} {...panResponder.panHandlers}>
@@ -358,6 +396,14 @@ export default function SlingshotGame() {
                 <Stop offset="100%" stopColor={p.color} stopOpacity={0} />
               </RadialGradient>
             ))}
+            <LinearGradient id="shipHull" x1="0%" y1="0%" x2="100%" y2="100%">
+              <Stop offset="0%" stopColor="#f6f8ff" />
+              <Stop offset="100%" stopColor="#8ea2c9" />
+            </LinearGradient>
+            <LinearGradient id="shipFlame" x1="0%" y1="50%" x2="100%" y2="50%">
+              <Stop offset="0%" stopColor="#ff6b3d" stopOpacity={0} />
+              <Stop offset="100%" stopColor="#ffcf6b" stopOpacity={0.95} />
+            </LinearGradient>
           </Defs>
 
           {STARS.map((s, i) => (
@@ -426,7 +472,21 @@ export default function SlingshotGame() {
           )}
 
           {(phase === 'flying' || phase === 'crashed') && (
-            <Polygon points={shipTriangle} fill={phase === 'crashed' ? '#ff4d6d' : '#e2e8ff'} />
+            <G transform={`translate(${shipScreen.x} ${shipScreen.y}) rotate(${shipRotationDeg}) scale(${SHIP_RADIUS})`}>
+              {phase === 'flying' && speed > 4 && (
+                <Polygon
+                  points={`-0.6,0.35 ${-(0.6 + flameLength)},0 -0.6,-0.35`}
+                  fill="url(#shipFlame)"
+                />
+              )}
+              <Polygon
+                points="2.0,0 0.5,0.65 -1.3,1.05 -0.6,0 -1.3,-1.05 0.5,-0.65"
+                fill={phase === 'crashed' ? '#ff4d6d' : 'url(#shipHull)'}
+                stroke={phase === 'crashed' ? '#ffb3c1' : '#4a5a82'}
+                strokeWidth={0.12}
+              />
+              {phase === 'flying' && <Circle cx={0.55} cy={0} r={0.3} fill="#2c3e6b" />}
+            </G>
           )}
         </Svg>
 

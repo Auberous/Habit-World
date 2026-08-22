@@ -69,6 +69,10 @@ preview.
 
 ## How it plays
 
+- The camera **opens wide** on arrival — enough to see out past Saturn —
+  so you can actually survey the field and pick a strategy before
+  committing to a shot. It eases into the tight aiming view the moment you
+  touch down to drag.
 - **Pull back** from the green launch pad like a slingshot — the elastic
   gets visibly harder to stretch the farther you pull (diminishing returns,
   not a linear power bar) — and **release** to launch.
@@ -103,11 +107,11 @@ preview.
   risk-ring radii, and the local escape-speed formula. Pure functions, no
   React — easy to unit test or retune independent of rendering.
 - `src/SlingshotGame.tsx` — game state machine (aiming / flying / crashed /
-  escaped), the drag-to-launch gesture (`PanResponder`), the fuzzy
-  trajectory preview (a short forward simulation re-run on every pointer
-  move), the
-  `requestAnimationFrame` sim loop, and the `react-native-svg` rendering of
-  orbits, bodies, trail, and ship.
+  escaped), the drag-to-launch gesture (`PanResponder`), the wide-to-tight
+  intro camera zoom, the fuzzy trajectory preview (a short forward
+  simulation re-run on every pointer move), the `requestAnimationFrame` sim
+  loop, and the `react-native-svg` rendering of orbits, bodies, trail, and
+  the ship (hull + engine flame + cockpit, not a bare triangle).
 - `src/geometry.ts` — polar/SVG-arc helpers, reused from the previous
   tap-to-dodge prototype.
 
