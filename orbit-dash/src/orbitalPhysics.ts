@@ -73,6 +73,20 @@ export const VIEW_RADIUS = 320; // world units shown at the board edge when un-z
 // multi-planet gauntlet, not one lucky close pass near Earth.
 export const ESCAPE_RADIUS = auOrbit(30.05) + 700;
 
+export type Milestone = { distance: number; label: string };
+
+/** Named waypoints on the way out, fired once per run as the ship's max
+ * distance first crosses each threshold — turns "escape or nothing" into a
+ * ladder of small wins on the way to the big one. */
+export const MILESTONES: Milestone[] = [
+  { distance: auOrbit(1.52), label: 'Cleared Mars orbit' },
+  { distance: auOrbit(2.8), label: 'Crossed the asteroid belt' },
+  { distance: auOrbit(5.2), label: 'Jupiter flyby complete' },
+  { distance: auOrbit(9.58), label: 'Saturn flyby complete' },
+  { distance: auOrbit(19.22), label: "Past Uranus' orbit" },
+  { distance: auOrbit(30.05), label: 'Neptune flyby — edge of the known planets' },
+];
+
 const MIN_GRAVITY_DIST = 2;
 export const COLLISION_MARGIN = 3;
 

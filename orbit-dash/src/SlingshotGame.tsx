@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dimensions, StyleSheet, Text, View, type GestureResponderEvent, type PanResponderGestureState } from 'react-native';
 import { PanResponder } from 'react-native';
 import Svg, { Circle, Defs, Ellipse, Path, Polygon, Polyline, RadialGradient, Stop } from 'react-native-svg';
@@ -8,6 +8,7 @@ import {
   integrateShip,
   LAUNCH_PAD,
   localEscapeSpeed,
+  MILESTONES,
   PLANETS,
   riskRadii,
   VIEW_RADIUS,
@@ -16,6 +17,9 @@ import {
   type Vec2,
 } from './orbitalPhysics';
 import { generateStars } from './starfield';
+import { loadBestDistance, saveBestDistance } from './storage';
+
+const TOAST_DURATION_MS = 2600;
 
 type Phase = 'aiming' | 'flying' | 'crashed' | 'escaped';
 
@@ -62,6 +66,9 @@ export default function SlingshotGame() {
   const [phase, setPhase] = useState<Phase>('aiming');
   const [, setRenderTick] = useState(0);
   const [aimDrag, setAimDrag] = useState<Vec2 | null>(null);
+  const [bestDistance, setBestDistance] = useState(0);
+  const [isNewRecord, setIsNewRecord] = useState(false);
+  const [milestoneToast, setMilestoneToast] = useState<{ text: string; startedAt: number } | null>(null);
 
   const shipPos = useRef<Vec2>({ ...LAUNCH_PAD });
   const shipVel = useRef<Vec2>({ x: 0, y: 0 });
@@ -72,6 +79,16 @@ export default function SlingshotGame() {
   const rafRef = useRef<number | null>(null);
   const lastTsRef = useRef<number | null>(null);
   const maxDistReached = useRef(vLen(LAUNCH_PAD));
+  const firedMilestones = useRef<Set<number>>(new Set());
+  const bestDistanceRef = useRef(0);
+  const toastExpiryRef = useRef(0);
+
+  useEffect(() => {
+    loadBestDistance().then((d) => {
+      setBestDistance(d);
+      bestDistanceRef.current = d;
+    });
+  }, []);
 
   const baselineScale = BOARD_SIZE / (2 * VIEW_RADIUS);
   const cameraScale = useRef(baselineScale);
@@ -106,14 +123,40 @@ export default function SlingshotGame() {
     maxDistReached.current = Math.max(maxDistReached.current, dist);
     updateCamera(dist);
 
+    MILESTONES.forEach((m, i) => {
+      if (maxDistReached.current >= m.distance && !firedMilestones.current.has(i)) {
+        firedMilestones.current.add(i);
+        toastExpiryRef.current = performance.now() + TOAST_DURATION_MS;
+        setMilestoneToast({ text: m.label, startedAt: performance.now() });
+      }
+    });
+    if (toastExpiryRef.current && performance.now() > toastExpiryRef.current) {
+      toastExpiryRef.current = 0;
+      setMilestoneToast(null);
+    }
+
+    const finishRun = () => {
+      if (maxDistReached.current > bestDistanceRef.current) {
+        bestDistanceRef.current = maxDistReached.current;
+        setBestDistance(maxDistReached.current);
+        setIsNewRecord(true);
+        saveBestDistance(maxDistReached.current);
+      } else {
+        setIsNewRecord(false);
+      }
+      setMilestoneToast(null);
+    };
+
     if (result.collidedWith) {
       crashBody.current = result.collidedWith;
+      finishRun();
       setPhase('crashed');
       stopLoop();
       setRenderTick((n) => n + 1);
       return;
     }
     if (dist > ESCAPE_RADIUS) {
+      finishRun();
       setPhase('escaped');
       stopLoop();
       setRenderTick((n) => n + 1);
@@ -132,6 +175,10 @@ export default function SlingshotGame() {
     trail.current = [{ ...LAUNCH_PAD }];
     crashBody.current = null;
     maxDistReached.current = vLen(LAUNCH_PAD);
+    firedMilestones.current = new Set();
+    toastExpiryRef.current = 0;
+    setMilestoneToast(null);
+    setIsNewRecord(false);
     setAimDrag(null);
     setPhase('flying');
     lastTsRef.current = null;
@@ -145,6 +192,9 @@ export default function SlingshotGame() {
     trail.current = [];
     crashBody.current = null;
     maxDistReached.current = vLen(LAUNCH_PAD);
+    firedMilestones.current = new Set();
+    toastExpiryRef.current = 0;
+    setMilestoneToast(null);
     cameraScale.current = baselineScale;
     bodiesRef.current = computeBodies(simTime.current);
     setAimDrag(null);
@@ -281,11 +331,19 @@ export default function SlingshotGame() {
       <View style={styles.center}>
         <View style={styles.hud}>
           <Text style={styles.hudTitle}>Voyager</Text>
-          <Text style={styles.hudSub}>dist {vLen(shipPos.current).toFixed(0)} / {ESCAPE_RADIUS}</Text>
+          <Text style={styles.hudSub}>
+            dist {vLen(shipPos.current).toFixed(0)} / {ESCAPE_RADIUS} · best {bestDistance.toFixed(0)}
+          </Text>
           <Text style={[styles.hudSub, speed >= escapeSpeedHere ? styles.hudGood : styles.hudBad]}>
             speed {speed.toFixed(0)} · escape needs {escapeSpeedHere.toFixed(0)}
           </Text>
         </View>
+
+        {milestoneToast && (
+          <View pointerEvents="none" style={styles.toast}>
+            <Text style={styles.toastText}>{milestoneToast.text}</Text>
+          </View>
+        )}
 
         <Svg width={BOARD_SIZE} height={BOARD_SIZE}>
           <Defs>
@@ -383,14 +441,20 @@ export default function SlingshotGame() {
             <Text style={styles.bigMessage}>
               Lost {crashBody.current?.id === 'sun' ? 'in the Sun' : `at ${capitalize(crashBody.current?.id ?? '')}`}
             </Text>
-            <Text style={styles.hint}>Tap to try again</Text>
+            <Text style={styles.hint}>
+              {isNewRecord ? `New best distance: ${maxDistReached.current.toFixed(0)}` : `Reached ${maxDistReached.current.toFixed(0)} · best ${bestDistance.toFixed(0)}`}
+            </Text>
+            <Text style={[styles.hint, styles.tapAgain]}>Tap to try again</Text>
           </View>
         )}
 
         {phase === 'escaped' && (
           <View pointerEvents="none" style={styles.overlay}>
             <Text style={styles.bigMessage}>Escape velocity reached</Text>
-            <Text style={styles.hint}>Tap to try again</Text>
+            <Text style={styles.hint}>
+              {isNewRecord ? `New best distance: ${maxDistReached.current.toFixed(0)}` : `Reached ${maxDistReached.current.toFixed(0)} · best ${bestDistance.toFixed(0)}`}
+            </Text>
+            <Text style={[styles.hint, styles.tapAgain]}>Tap to try again</Text>
           </View>
         )}
       </View>
@@ -431,6 +495,23 @@ const styles = StyleSheet.create({
   hudBad: {
     color: '#ff9f43',
   },
+  toast: {
+    position: 'absolute',
+    top: 118,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(20, 12, 46, 0.85)',
+    borderColor: '#4ade80',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+  },
+  toastText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#c9f7d9',
+    textAlign: 'center',
+  },
   overlay: {
     position: 'absolute',
     bottom: 70,
@@ -446,8 +527,12 @@ const styles = StyleSheet.create({
   },
   hint: {
     fontSize: 14,
-    color: '#4ade80',
+    color: '#9b8fc4',
     fontWeight: '600',
     textAlign: 'center',
+  },
+  tapAgain: {
+    color: '#4ade80',
+    marginTop: 6,
   },
 });

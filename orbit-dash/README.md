@@ -28,6 +28,13 @@ from "drag and watch" into something you have to learn:
   cannot reach local escape velocity — it will always arc back inward. Real
   gravity assists (ideally from Jupiter or Saturn, exactly like the actual
   Voyager missions) are mandatory, not optional flavor.
+- **A reason to try again**: best distance reached persists on-device and
+  shows live in the HUD; beating it fires a "new best distance" moment
+  instead of a generic game-over. Passing Mars' orbit, the asteroid belt,
+  Jupiter, Saturn, Uranus, and Neptune each fire a one-time named toast on
+  the way out — small wins on the way to the big one, instead of an
+  all-or-nothing wall. This is the fix for "the outcome feels pointless":
+  every attempt now has something to compare against and remember.
 
 - **Risk-zone rings** around every body while aiming: green (safe, small
   assist), yellow (bigger assist, real risk), red (collision). Skimming the
@@ -79,6 +86,10 @@ preview.
   distance. Fall short and you'll curve back inward for another attempt
   instead of drifting out forever — that's real orbital mechanics, not a
   scripted wall.
+- Passing Mars' orbit, the asteroid belt, Jupiter, Saturn, Uranus, or
+  Neptune for the first time in a run pops a named toast. Your farthest
+  distance ever reached persists on-device and shows in the HUD as "best" —
+  beating it is called out explicitly when a run ends.
 - Cross the escape radius while still above local escape speed →
   **"Escape velocity reached."** Fly through the Sun or a planet's collision
   radius → **"Lost in the [body] flyby."**
@@ -139,23 +150,32 @@ The design target this prototype is aimed at:
 
 ## Ideas for next passes
 
-From the mastery-loop design pass, deliberately deferred so each lands as
-its own reviewable change rather than one large rewrite:
+From the "what makes this addictive" design pass — the reward loop
+(persisted best distance, named milestones) landed; these are the pieces
+still deliberately deferred, each meant to land as its own reviewable
+change rather than one large rewrite:
 
-1. **Fuel/thrust bursts** — a finite fuel bar for mid-flight course
-   corrections, with periapsis burns worth far more than burns elsewhere.
-   Needs its own bit of UI (fuel bar) and state (burn input during flight).
-2. **Launch windows/optimal cone** — restrict launch to a narrow angle range
+1. **In-flight assist feedback** — a floating "+340 km/s — Jupiter assist"
+   callout and a visual pulse the instant a close pass pays off, so a good
+   slingshot is rewarding in the moment, not just reflected in the final
+   distance number.
+2. **Fuel/thrust bursts** — a finite fuel bar for mid-flight course
+   corrections, with periapsis burns worth far more than burns elsewhere —
+   gives every launch and correction real stakes instead of a free instant
+   retry. Needs its own bit of UI (fuel bar) and state (burn input during
+   flight).
+3. **Launch windows/optimal cone** — restrict launch to a narrow angle range
    depending on where the planets currently are, instead of any angle being
    launchable at any time.
-3. **Capture-into-orbit as a third failure mode** — right now every mistake
+4. **Capture-into-orbit as a third failure mode** — right now every mistake
    is either a crash or a fall-back for another attempt; a "weak flyby traps
    you in orbit, burn remaining fuel to break free" state needs fuel to
    exist first.
-4. **Checkpoints + failure hints** — remember progress within a run and
+5. **Checkpoints + failure hints** — remember progress within a run and
    surface what went wrong ("too shallow", "too fast") instead of a flat
    restart.
-5. Best-distance persistence, Endless Mode scoring, sound + haptics (from
-   the previous pass, still open).
-6. The zoom levels / game modes / sound design from the original full
+6. **Retention hooks** — a daily challenge seed (same planet phases each
+   day, shareable/comparable like Wordle) and cosmetic unlocks spent from
+   mission points, once there's a currency to spend.
+7. The zoom levels / game modes / sound design from the original full
    concept (see above) remain the long-range target.
