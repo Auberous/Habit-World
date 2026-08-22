@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, StyleSheet, Text, View, type GestureResponderEvent, type PanResponderGestureState } from 'react-native';
+import { Dimensions, Pressable, StyleSheet, Text, View, type GestureResponderEvent, type PanResponderGestureState } from 'react-native';
 import { PanResponder } from 'react-native';
-import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, Polyline, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, Ellipse, G, Line, LinearGradient, Path, Polygon, Polyline, RadialGradient, Stop } from 'react-native-svg';
 import {
   computeBodies,
   ESCAPE_RADIUS,
@@ -9,6 +9,7 @@ import {
   LAUNCH_PAD,
   localEscapeSpeed,
   MILESTONES,
+  planetPosition,
   PLANETS,
   riskRadii,
   VIEW_RADIUS,
@@ -54,10 +55,31 @@ const INTRO_ZOOM_MS = 1700;
 const PREVIEW_SECONDS = 2.6;
 const PREVIEW_DT = 1 / 20;
 
+// Ghost markers: where each planet will actually be a bit from now, so
+// leading a distant target is a visual read instead of a memorized guess.
+const GHOST_LEAD_SECONDS = 10;
+
+// Hold the "preview orbits" control during aiming to fast-forward the
+// planets (without moving the ship) and watch for a good alignment —
+// the same thing a real mission designer does when picking a launch window.
+const FAST_FORWARD_SPEED = 40;
+
+// Two correction burns per flight: a fixed prograde delta-v, so a single
+// aim isn't the whole plan — you can adjust once you see how it's going.
+const BURN_CHARGES = 2;
+const BURN_DELTA_V = 70;
+
+// The camera stays Sun-centered through the inner system (where the risk
+// rings/preview matter most), then eases into following the ship itself
+// once it's genuinely out in deep space, so a far-out ship never gets lost
+// near the edge of frame.
+const FOLLOW_START_DIST = 500;
+const FOLLOW_FULL_DIST = 2200;
+
 const STARS = generateStars(160);
 
-function toScreen(p: Vec2, scale: number): Vec2 {
-  return { x: CENTER + p.x * scale, y: CENTER + p.y * scale * TILT };
+function toScreen(p: Vec2, scale: number, center: Vec2): Vec2 {
+  return { x: CENTER + (p.x - center.x) * scale, y: CENTER + (p.y - center.y) * scale * TILT };
 }
 
 function screenDeltaToWorld(dx: number, dy: number, scale: number): Vec2 {
@@ -88,6 +110,10 @@ export default function SlingshotGame() {
   const firedMilestones = useRef<Set<number>>(new Set());
   const bestDistanceRef = useRef(0);
   const toastExpiryRef = useRef(0);
+  const cameraCenter = useRef<Vec2>({ x: 0, y: 0 });
+  const burnsRef = useRef(BURN_CHARGES);
+  const [burnsRemaining, setBurnsRemaining] = useState(BURN_CHARGES);
+  const ffRafRef = useRef<number | null>(null);
 
   useEffect(() => {
     loadBestDistance().then((d) => {
@@ -140,10 +166,17 @@ export default function SlingshotGame() {
     lastTsRef.current = null;
   }, []);
 
-  const updateCamera = useCallback((shipDist: number) => {
+  const updateCamera = useCallback((shipDist: number, shipPosNow: Vec2) => {
     const targetRadius = Math.max(VIEW_RADIUS, shipDist * 1.35);
     const targetScale = BOARD_SIZE / (2 * targetRadius);
     cameraScale.current += (targetScale - cameraScale.current) * 0.07;
+
+    const followT = Math.max(0, Math.min(1, (shipDist - FOLLOW_START_DIST) / (FOLLOW_FULL_DIST - FOLLOW_START_DIST)));
+    const targetCenter = { x: shipPosNow.x * followT, y: shipPosNow.y * followT };
+    cameraCenter.current = {
+      x: cameraCenter.current.x + (targetCenter.x - cameraCenter.current.x) * 0.05,
+      y: cameraCenter.current.y + (targetCenter.y - cameraCenter.current.y) * 0.05,
+    };
   }, []);
 
   const tick = useCallback((ts: number) => {
@@ -162,7 +195,7 @@ export default function SlingshotGame() {
 
     const dist = vLen(result.pos);
     maxDistReached.current = Math.max(maxDistReached.current, dist);
-    updateCamera(dist);
+    updateCamera(dist, result.pos);
 
     MILESTONES.forEach((m, i) => {
       if (maxDistReached.current >= m.distance && !firedMilestones.current.has(i)) {
@@ -220,6 +253,9 @@ export default function SlingshotGame() {
     toastExpiryRef.current = 0;
     setMilestoneToast(null);
     setIsNewRecord(false);
+    cameraCenter.current = { x: 0, y: 0 };
+    burnsRef.current = BURN_CHARGES;
+    setBurnsRemaining(BURN_CHARGES);
     setAimDrag(null);
     setPhase('flying');
     lastTsRef.current = null;
@@ -237,12 +273,55 @@ export default function SlingshotGame() {
     firedMilestones.current = new Set();
     toastExpiryRef.current = 0;
     setMilestoneToast(null);
+    cameraCenter.current = { x: 0, y: 0 };
     bodiesRef.current = computeBodies(simTime.current);
     setAimDrag(null);
     setPhase('aiming');
     startIntroZoom();
     setRenderTick((n) => n + 1);
   }, [stopLoop, startIntroZoom]);
+
+  const stopFastForward = useCallback(() => {
+    if (ffRafRef.current != null) cancelAnimationFrame(ffRafRef.current);
+    ffRafRef.current = null;
+  }, []);
+
+  // Fast-forwards the planets' orbits (not the ship) so you can watch for a
+  // good alignment before committing to a launch — a real launch-window
+  // preview, not just a guess.
+  const startFastForward = useCallback(() => {
+    if (phase !== 'aiming') return;
+    stopIntroZoom();
+    cameraScale.current = baselineScale;
+    stopFastForward();
+    let lastTs: number | null = null;
+    const step = (ts: number) => {
+      if (lastTs == null) lastTs = ts;
+      const dt = Math.min((ts - lastTs) / 1000, 0.05);
+      lastTs = ts;
+      simTime.current += dt * FAST_FORWARD_SPEED;
+      bodiesRef.current = computeBodies(simTime.current);
+      setRenderTick((n) => n + 1);
+      ffRafRef.current = requestAnimationFrame(step);
+    };
+    ffRafRef.current = requestAnimationFrame(step);
+  }, [phase, stopIntroZoom, baselineScale, stopFastForward]);
+
+  // A limited prograde correction burn: one aim isn't the whole plan, you
+  // can nudge the ship once you see how the first leg is actually going.
+  const applyBurn = useCallback(() => {
+    if (phase !== 'flying' || burnsRef.current <= 0) return;
+    const v = shipVel.current;
+    const spd = vLen(v);
+    if (spd > 0.01) {
+      const dir = { x: v.x / spd, y: v.y / spd };
+      shipVel.current = { x: v.x + dir.x * BURN_DELTA_V, y: v.y + dir.y * BURN_DELTA_V };
+    }
+    burnsRef.current -= 1;
+    setBurnsRemaining(burnsRef.current);
+  }, [phase]);
+
+  useEffect(() => stopFastForward, [stopFastForward]);
 
   const panResponder = useMemo(
     () =>
@@ -255,8 +334,10 @@ export default function SlingshotGame() {
             return;
           }
           if (phase === 'aiming') {
-            // Touching down to actually aim ends the wide overview and
-            // commits to the tight, precisely-tuned drag scale.
+            // Touching down to actually aim ends the wide overview (and any
+            // launch-window preview in progress) and commits to the tight,
+            // precisely-tuned drag scale.
+            stopFastForward();
             snapToAimScale();
           }
         },
@@ -279,25 +360,39 @@ export default function SlingshotGame() {
           });
         },
       }),
-    [phase, launch, resetToAiming, snapToAimScale]
+    [phase, launch, resetToAiming, snapToAimScale, stopFastForward]
   );
 
   const scale = cameraScale.current;
-  const shipScreen = toScreen(shipPos.current, scale);
+  const center = cameraCenter.current;
+  const originScreen = toScreen({ x: 0, y: 0 }, scale, center);
+  const shipScreen = toScreen(shipPos.current, scale, center);
   const speed = vLen(shipVel.current);
   const escapeSpeedHere = localEscapeSpeed(vLen(shipPos.current));
   const heading = Math.atan2(shipVel.current.y, shipVel.current.x);
   const shipTipAngle = phase === 'aiming' && aimDrag ? Math.atan2(-aimDrag.y, -aimDrag.x) : heading;
 
   const trailPoints = trail.current.map((p) => {
-    const s = toScreen(p, scale);
+    const s = toScreen(p, scale, center);
     return `${s.x},${s.y}`;
   }).join(' ');
 
-  const launchScreen = toScreen(LAUNCH_PAD, scale);
+  const launchScreen = toScreen(LAUNCH_PAD, scale, center);
   const dragLen = aimDrag ? vLen(aimDrag) : 0;
   const powerFactor = Math.tanh(dragLen / DRAG_SOFTNESS);
-  const aimEnd = aimDrag ? toScreen({ x: LAUNCH_PAD.x + aimDrag.x, y: LAUNCH_PAD.y + aimDrag.y }, scale) : null;
+  const aimEnd = aimDrag ? toScreen({ x: LAUNCH_PAD.x + aimDrag.x, y: LAUNCH_PAD.y + aimDrag.y }, scale, center) : null;
+
+  // Ghost markers: where each planet will actually be a bit from now, at
+  // this same (fast-forwardable) sim time — a visual aid for leading a
+  // distant target instead of memorizing its orbital speed.
+  const ghostMarkers = phase === 'aiming'
+    ? PLANETS.map((p) => ({
+        id: p.id,
+        color: p.color,
+        from: toScreen(planetPosition(p, simTime.current), scale, center),
+        to: toScreen(planetPosition(p, simTime.current + GHOST_LEAD_SECONDS), scale, center),
+      }))
+    : [];
 
   const bandPath = useMemo(() => {
     if (!aimDrag || !aimEnd) return null;
@@ -345,13 +440,13 @@ export default function SlingshotGame() {
       if (end - start < 2) continue;
       const slice = previewPoints.slice(start, end);
       const pts = slice.map((p) => {
-        const s = toScreen(p, scale);
+        const s = toScreen(p, scale, center);
         return `${s.x},${s.y}`;
       }).join(' ');
       segments.push({ points: pts, opacity: 0.5 - c * 0.1 });
     }
     return segments;
-  }, [previewPoints, scale]);
+  }, [previewPoints, scale, center]);
 
   const distanceRings = useMemo(() => {
     const rings: number[] = [];
@@ -365,8 +460,8 @@ export default function SlingshotGame() {
   const flameLength = Math.min(1.1, 0.4 + speed / 260);
 
   return (
-    <View style={styles.fill} {...panResponder.panHandlers}>
-      <View style={styles.center}>
+    <View style={styles.fill}>
+      <View style={styles.center} {...panResponder.panHandlers}>
         <View style={styles.hud}>
           <Text style={styles.hudTitle}>Voyager</Text>
           <Text style={styles.hudSub}>
@@ -374,6 +469,7 @@ export default function SlingshotGame() {
           </Text>
           <Text style={[styles.hudSub, speed >= escapeSpeedHere ? styles.hudGood : styles.hudBad]}>
             speed {speed.toFixed(0)} · escape needs {escapeSpeedHere.toFixed(0)}
+            {phase === 'flying' ? ` · burns ${burnsRemaining}` : ''}
           </Text>
         </View>
 
@@ -411,14 +507,14 @@ export default function SlingshotGame() {
           ))}
 
           {distanceRings.map((r) => (
-            <Ellipse key={r} cx={CENTER} cy={CENTER} rx={r * scale} ry={r * scale * TILT} stroke="#1c1638" strokeWidth={1} fill="none" />
+            <Ellipse key={r} cx={originScreen.x} cy={originScreen.y} rx={r * scale} ry={r * scale * TILT} stroke="#1c1638" strokeWidth={1} fill="none" />
           ))}
 
           {PLANETS.map((p) => (
             <Ellipse
               key={`orbit-${p.id}`}
-              cx={CENTER}
-              cy={CENTER}
+              cx={originScreen.x}
+              cy={originScreen.y}
               rx={p.orbitRadius * scale}
               ry={p.orbitRadius * scale * TILT}
               stroke="#2c2156"
@@ -431,8 +527,15 @@ export default function SlingshotGame() {
             <Polyline points={trailPoints} stroke="#4ade80" strokeWidth={1.5} fill="none" opacity={0.5} />
           )}
 
+          {phase === 'aiming' && ghostMarkers.map((g) => (
+            <React.Fragment key={`ghost-${g.id}`}>
+              <Line x1={g.from.x} y1={g.from.y} x2={g.to.x} y2={g.to.y} stroke={g.color} strokeWidth={1} strokeDasharray="1,4" opacity={0.4} />
+              <Circle cx={g.to.x} cy={g.to.y} r={3.5} stroke={g.color} strokeWidth={1.3} strokeDasharray="2,2" fill="none" opacity={0.75} />
+            </React.Fragment>
+          ))}
+
           {phase === 'aiming' && bodiesRef.current.map((b) => {
-            const s = toScreen(b.pos, scale);
+            const s = toScreen(b.pos, scale, center);
             const risk = riskRadii(b);
             return (
               <React.Fragment key={`risk-${b.id}`}>
@@ -448,7 +551,7 @@ export default function SlingshotGame() {
           ))}
 
           {bodiesRef.current.map((b) => {
-            const s = toScreen(b.pos, scale);
+            const s = toScreen(b.pos, scale, center);
             const r = Math.max(b.radius * scale, 2.5);
             const glowId = b.id === 'sun' ? 'sunGlow' : `glow-${b.id}`;
             return (
@@ -518,6 +621,30 @@ export default function SlingshotGame() {
           </View>
         )}
       </View>
+
+      {phase === 'aiming' && (
+        <Pressable
+          style={({ pressed }) => [styles.controlButton, pressed && styles.controlButtonPressed]}
+          onPressIn={startFastForward}
+          onPressOut={stopFastForward}
+        >
+          <Text style={styles.controlButtonText}>⏩ Hold to preview orbits</Text>
+        </Pressable>
+      )}
+
+      {phase === 'flying' && (
+        <Pressable
+          style={({ pressed }) => [
+            styles.controlButton,
+            burnsRemaining <= 0 && styles.controlButtonDisabled,
+            pressed && burnsRemaining > 0 && styles.controlButtonPressed,
+          ]}
+          onPress={applyBurn}
+          disabled={burnsRemaining <= 0}
+        >
+          <Text style={styles.controlButtonText}>🔥 Burn ({burnsRemaining})</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -594,5 +721,27 @@ const styles = StyleSheet.create({
   tapAgain: {
     color: '#4ade80',
     marginTop: 6,
+  },
+  controlButton: {
+    position: 'absolute',
+    bottom: 20,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(20, 12, 46, 0.9)',
+    borderColor: '#4a5a82',
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+  },
+  controlButtonPressed: {
+    backgroundColor: 'rgba(74, 90, 130, 0.9)',
+  },
+  controlButtonDisabled: {
+    opacity: 0.4,
+  },
+  controlButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#e2e8ff',
   },
 });

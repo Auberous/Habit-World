@@ -51,10 +51,21 @@ from "drag and watch" into something you have to learn:
 - **Rubber-band launch** with a much bigger, cinematic scale and a camera
   that zooms out as you travel (see below) — unchanged from the previous
   pass.
+- **Strategize before you commit**: the camera opens on a wide overview
+  (out past Saturn) instead of a tight Earth-only view, ghost markers show
+  where each planet will actually be a bit from now, and holding "preview
+  orbits" fast-forwards the planets (not the ship) so you can watch for a
+  favorable alignment before ever pulling the sling — a real launch-window
+  preview, not a guess.
+- **A plan you can adjust mid-flight**: two correction burns per run — a
+  fixed prograde delta-v, tap to use — mean one aim isn't the whole plan.
+  The camera also gradually recenters on the ship itself once it's genuinely
+  far from the Sun, so a deep-space ship never gets lost near the frame edge.
 
 See [Ideas for next passes](#ideas-for-next-passes) for the parts of the
-full design (fuel/thrust bursts, launch windows, capture-into-orbit,
-checkpoints) that are deliberately not built yet.
+full design (fuel bar / continuous thrust rather than discrete burns,
+launch-angle windows, capture-into-orbit, checkpoints) that are
+deliberately not built yet.
 
 ## Running it
 
@@ -73,6 +84,11 @@ preview.
   so you can actually survey the field and pick a strategy before
   committing to a shot. It eases into the tight aiming view the moment you
   touch down to drag.
+- **Hold "⏩ preview orbits"** to fast-forward the planets (the ship stays
+  put) and watch for a good alignment before you ever pull back — this is
+  the actual tool for picking a launch window, not trial and error. Small
+  dashed rings near each planet are ghost markers showing where it'll
+  actually be in ~10 seconds, so leading a distant target is a visual read.
 - **Pull back** from the green launch pad like a slingshot — the elastic
   gets visibly harder to stretch the farther you pull (diminishing returns,
   not a linear power bar) — and **release** to launch.
@@ -80,6 +96,11 @@ preview.
   (safe assist) / yellow (high-risk, high-reward) / red (collision) zones,
   and a short dotted preview shows roughly where that pull is about to send
   you — a few seconds ahead, not the whole flight.
+- **Mid-flight, tap "🔥 Burn"** (twice per run) to add a fixed prograde
+  delta-v in your current direction of travel — a real correction, not just
+  a do-over. The camera also gradually shifts from Sun-centered to
+  ship-centered the farther out you get, so you can always see where you
+  actually are.
 - Flight is pure gravity: the Sun and all eight planets each pull on the
   ship by the inverse-square law, every frame, no scripted paths. Skim a
   yellow ring for a strong assist; cross into red and it's a collision.
@@ -108,10 +129,15 @@ preview.
   React — easy to unit test or retune independent of rendering.
 - `src/SlingshotGame.tsx` — game state machine (aiming / flying / crashed /
   escaped), the drag-to-launch gesture (`PanResponder`), the wide-to-tight
-  intro camera zoom, the fuzzy trajectory preview (a short forward
-  simulation re-run on every pointer move), the `requestAnimationFrame` sim
-  loop, and the `react-native-svg` rendering of orbits, bodies, trail, and
-  the ship (hull + engine flame + cockpit, not a bare triangle).
+  intro camera zoom (and the Sun-to-ship follow blend once far out), the
+  launch-window fast-forward loop and ghost-marker future positions, the
+  fuzzy trajectory preview (a short forward simulation re-run on every
+  pointer move), correction burns, the `requestAnimationFrame` sim loop,
+  and the `react-native-svg` rendering of orbits, bodies, trail, and the
+  ship (hull + engine flame + cockpit, not a bare triangle). The
+  fast-forward/burn buttons are deliberately structural siblings of the
+  drag-responder view, not nested inside it, so their taps aren't swallowed
+  by the full-screen `PanResponder`.
 - `src/geometry.ts` — polar/SVG-arc helpers, reused from the previous
   tap-to-dodge prototype.
 
@@ -154,27 +180,30 @@ The design target this prototype is aimed at:
 
 ## Ideas for next passes
 
-From the "what makes this addictive" design pass — the reward loop
-(persisted best distance, named milestones) landed; these are the pieces
-still deliberately deferred, each meant to land as its own reviewable
-change rather than one large rewrite:
+From the "what makes this addictive" and "how do I strategize" design
+passes — the reward loop (persisted best distance, named milestones),
+launch-window preview (fast-forward + ghost markers), correction burns, and
+the ship-following camera have all landed. Still deliberately deferred,
+each meant to land as its own reviewable change rather than one large
+rewrite:
 
 1. **In-flight assist feedback** — a floating "+340 km/s — Jupiter assist"
    callout and a visual pulse the instant a close pass pays off, so a good
    slingshot is rewarding in the moment, not just reflected in the final
    distance number.
-2. **Fuel/thrust bursts** — a finite fuel bar for mid-flight course
-   corrections, with periapsis burns worth far more than burns elsewhere —
-   gives every launch and correction real stakes instead of a free instant
-   retry. Needs its own bit of UI (fuel bar) and state (burn input during
-   flight).
-3. **Launch windows/optimal cone** — restrict launch to a narrow angle range
+2. **Fuel bar / continuous thrust** — the current two correction burns are
+   discrete fixed-Δv charges; a real fuel gauge with variable-length burns
+   (and periapsis burns worth far more than burns elsewhere) is the fuller
+   version of the same idea.
+3. **Launch-angle windows** — restrict launch to a narrow angle range
    depending on where the planets currently are, instead of any angle being
-   launchable at any time.
+   launchable at any time. The fast-forward preview already lets you *wait*
+   for a good window; this would make picking the wrong window a real
+   constraint, not just a suboptimal choice.
 4. **Capture-into-orbit as a third failure mode** — right now every mistake
    is either a crash or a fall-back for another attempt; a "weak flyby traps
-   you in orbit, burn remaining fuel to break free" state needs fuel to
-   exist first.
+   you in orbit, burn remaining fuel to break free" state fits naturally
+   once burns feel more fuel-like (see #2).
 5. **Checkpoints + failure hints** — remember progress within a run and
    surface what went wrong ("too shallow", "too fast") instead of a flat
    restart.
